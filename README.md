@@ -18,3 +18,5 @@ Open the generated invitation in a browser. The site runs at http://localhost:51
 For source development, use Node 24 and the pnpm version in `package.json`. Start the database with Compose, load the settings from `.env.example` into your shell, install with `pnpm install --frozen-lockfile`, and run `pnpm db:migrate`. Start `pnpm dev:api` and `pnpm dev` in separate shells. The frontend runs at http://localhost:5173. Run `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, and `pnpm build` before submitting changes.
 
 The repository is publicly visible. No open-source license has been selected.
+
+The shared preview follows passing pull requests from this repository. Preview accounts are separate from production accounts.
