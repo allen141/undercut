@@ -217,6 +217,8 @@ test('trades a full day and returns with its ledger and remaining stock', async 
 
 test('keeps two campaigns independent across two days, reconnects, and accepts a reset link', async ({ browser, context, page, account, baseURL }, info) => {
   test.skip(info.project.name !== 'desktop-chromium', 'The connection and concurrency checks run in desktop Chromium.');
+  // Two full days, reconnect, a second tab and password reset run through software WebGL on CI.
+  test.setTimeout(300_000);
   const errors = captureErrors(page);
   await invite(page, account);
   await createCampaign(page, 'Lantern & Co.');
