@@ -235,6 +235,8 @@ export function App() {
   }
 
   if (loading) return <main className="loading">Opening the shop…</main>;
+  if (campaign && !authScreen) return <Game key={campaign.id} campaign={campaign} busy={busy} online={online}
+    pending={pending} error={error} send={send} back={() => guarded(async () => { await loadList(); setCampaign(null); })} />;
   return <>
     <header className="topbar">
       <a className="brand" href="/" aria-label="Undercut home"><span className="brand-symbol">u</span>undercut</a>
@@ -261,7 +263,7 @@ export function App() {
           {link.mode === 'login' ? <p className="muted small">Ask the operator for an invitation or a password-reset link.</p> :
             <button className="text-button" onClick={showLogin} disabled={busy}>Back to sign in</button>}
         </div>
-      </section> : !campaign ? <section className="lobby">
+      </section> : <section className="lobby">
         <div className="section-heading">
           <h1>Your campaigns</h1>
           <p className="muted">Pick up where you left off, or start a new shop with its own stock and gold.</p>
@@ -279,8 +281,7 @@ export function App() {
             <p className="muted small">100 gold. Three shelves. Your choice of town.</p>
           </form>
         </div>
-      </section> : <Game key={campaign.id} campaign={campaign} busy={busy} online={online} pending={pending}
-        send={send} back={() => guarded(async () => { await loadList(); setCampaign(null); })} />}
+      </section>}
     </main>
     <footer><span>Undercut</span><span>{user ? 'Progress saved after every action' : 'A shop between towns'}</span></footer>
   </>;

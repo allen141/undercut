@@ -30,3 +30,36 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
   .town-heading > span { margin-left: auto; }
 }
 .scene-failed canvas { display: none !important; }
+
+.canvas-game {
+  position: fixed;
+  inset: 0;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #171b25;
+  overscroll-behavior: contain;
+}
+.canvas-stage, .canvas-controls { position: absolute; inset: 0; }
+.canvas-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.canvas-controls { pointer-events: none; overflow: hidden; }
+.canvas-controls button { position: absolute; opacity: 0; pointer-events: none; }
+.canvas-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.canvas-recovery {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
