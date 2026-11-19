@@ -215,6 +215,65 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   expect(errors).toEqual([]);
 });
 
+test('fits and accepts touch within a zoomed Android viewport', async ({ page, account }, info) => {
+  test.skip(info.project.name !== 'mobile-chromium', 'Uses Chrome DevTools to reproduce Android page zoom.');
+  await page.setViewportSize({ width: 360, height: 700 });
+  await invite(page, account);
+  const cdp = await page.context().newCDPSession(page);
+  const shopName = page.getByLabel('Shop name');
+  await shopName.fill('Pocket Counter');
+  // The shop must lay out correctly when the lobby is already zoomed.
+  await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1.7 });
+  await shopName.press('Enter');
+  await expect(shopCanvas(page)).toBeVisible();
+  await expectRevision(page, 0);
+  const viewportFit = () => shopCanvas(page).evaluate((canvas: HTMLCanvasElement) => {
+    const viewport = visualViewport!;
+    const box = canvas.getBoundingClientRect();
+    return {
+      zoom: viewport.scale,
+      deviceRatio: devicePixelRatio,
+      backingRatio: canvas.width / box.width,
+      left: Math.abs(box.x - viewport.offsetLeft),
+      top: Math.abs(box.y - viewport.offsetTop),
+      width: Math.abs(box.width - viewport.width),
+      height: Math.abs(box.height - viewport.height),
+    };
+  });
+  await expect.poll(async () => {
+    const result = await viewportFit();
+    return Math.max(result.left, result.top, result.width, result.height);
+  }).toBeLessThan(2);
+  const zoomed = await viewportFit();
+  expect(zoomed.zoom).toBeCloseTo(1.7, 2);
+  expect(zoomed.deviceRatio).toBeGreaterThan(2);
+  expect(zoomed.backingRatio).toBeCloseTo(2, 1);
+  await chooseTown(page, 'Meadow');
+  await expectRevision(page, 1);
+  await buy(page, 'Grain');
+  await expectRevision(page, 2);
+  await expectStock(page, 'grain', 1);
+  await activate(page, 'Close panel');
+  for (const name of ['All campaigns', 'Inventory and gold', 'Wholesaler', 'Open the shop']) {
+    const target = action(page, name);
+    await expect(target).toHaveCount(1);
+    expect(await target.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const viewport = visualViewport!;
+      return box.left >= viewport.offsetLeft - 1 && box.top >= viewport.offsetTop - 1 &&
+        box.right <= viewport.offsetLeft + viewport.width + 1 &&
+        box.bottom <= viewport.offsetTop + viewport.height + 1;
+    })).toBe(true);
+  }
+  await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 });
+  // The CDP scale shortcut updates metrics without sending a resize event.
+  await page.evaluate(() => visualViewport!.dispatchEvent(new Event('resize')));
+  await expect.poll(async () => {
+    const result = await viewportFit();
+    return Math.max(result.left, result.top, result.width, result.height);
+  }).toBeLessThan(2);
+});
+
 test('keeps two campaigns independent across two days, reconnects, and accepts a reset link', async ({ browser, context, page, account, baseURL }, info) => {
   test.skip(info.project.name !== 'desktop-chromium', 'The connection and concurrency checks run in desktop Chromium.');
   // Two full days, reconnect, a second tab and password reset run through software WebGL on CI.

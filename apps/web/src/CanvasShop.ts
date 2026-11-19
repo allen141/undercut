@@ -24,7 +24,7 @@ const rectangle = (x: number, y: number, w: number, h: number): Rect => ({ x, y,
 export async function mountShop(host: HTMLElement, keyboard: HTMLElement, props: () => GameProps): Promise<ShopController> {
   const app = new Application();
   await app.init({ width: Math.max(1, host.clientWidth), height: Math.max(1, host.clientHeight),
-    preference: 'webgl', failIfMajorPerformanceCaveat: false, autoDensity: true, antialias: true, autoStart: false,
+    preference: 'webgl', failIfMajorPerformanceCaveat: false, autoDensity: false, antialias: true, autoStart: false,
     resolution: Math.min(devicePixelRatio || 1, 2), background: 0x171b25 });
   host.append(app.canvas);
   app.canvas.setAttribute('aria-hidden', 'true');
@@ -533,7 +533,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, props:
     if (!w || !h) return;
     effect = undefined;
     feedback.clear();
-    scale = Math.min(1, h / 505);
+    scale = Math.min(1, h / 505, w / 320);
     width = w / scale;
     height = h / scale;
     art.scale.set(scale);

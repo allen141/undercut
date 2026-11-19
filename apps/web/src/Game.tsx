@@ -15,12 +15,41 @@ export type GameProps = {
 };
 
 export function Game(props: GameProps) {
+  const viewport = useRef<HTMLElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const controls = useRef<HTMLDivElement>(null);
   const controller = useRef<ShopController | null>(null);
   const latest = useRef(props);
   const [view, setView] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const element = viewport.current;
+    const visible = window.visualViewport;
+    if (!element || !visible) return;
+
+    // A fixed element follows the layout viewport. Mobile browser chrome and
+    // inherited pinch zoom can expose only a smaller, offset rectangle.
+    function fitVisibleViewport() {
+      if (!element || !visible || visible.width <= 0 || visible.height <= 0) return;
+      Object.assign(element.style, {
+        width: Math.floor(visible.width) + 'px',
+        height: Math.floor(visible.height) + 'px',
+        left: visible.offsetLeft + 'px',
+        top: visible.offsetTop + 'px',
+      });
+    }
+
+    fitVisibleViewport();
+    visible.addEventListener('resize', fitVisibleViewport);
+    visible.addEventListener('scroll', fitVisibleViewport);
+    window.addEventListener('resize', fitVisibleViewport);
+    return () => {
+      visible.removeEventListener('resize', fitVisibleViewport);
+      visible.removeEventListener('scroll', fitVisibleViewport);
+      window.removeEventListener('resize', fitVisibleViewport);
+    };
+  }, []);
 
   useEffect(() => {
     let stopped = false;
@@ -52,7 +81,7 @@ export function Game(props: GameProps) {
     state.phase === 'open' ? state.log.at(-1) ?? 'The shop is open.' :
     `Day ${state.day}. ${state.gold} gold. Progress saved.`);
 
-  return <main className="canvas-game" aria-label={campaign.name} aria-busy={busy} data-revision={campaign.revision}>
+  return <main ref={viewport} className="canvas-game" aria-label={campaign.name} aria-busy={busy} data-revision={campaign.revision}>
     <div className="canvas-stage" ref={stage} />
     <div className="canvas-controls" ref={controls} aria-label="Shop controls" />
     <div className="canvas-announcement">
