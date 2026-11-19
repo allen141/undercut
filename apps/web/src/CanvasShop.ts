@@ -1,5 +1,9 @@
-import { Application, Container, Graphics, Rectangle, Text } from 'pixi.js';
+import { AccessibilitySystem, Application, Container, Graphics, Rectangle, Text, extensions } from 'pixi.js';
+import 'pixi.js/browser';
 import 'pixi.js/unsafe-eval';
+
+// The shop supplies its own semantic focus controls, including on touch devices.
+extensions.remove(AccessibilitySystem);
 import { GOODS, TOWNS, inventoryValue, priceRange, quantity, type GoodId } from '@undercut/game-core';
 import type { GameProps } from './Game.js';
 import { drawRoom, roomLayout } from './ShopArt.js';
@@ -20,10 +24,11 @@ const rectangle = (x: number, y: number, w: number, h: number): Rect => ({ x, y,
 export async function mountShop(host: HTMLElement, keyboard: HTMLElement, props: () => GameProps): Promise<ShopController> {
   const app = new Application();
   await app.init({ width: Math.max(1, host.clientWidth), height: Math.max(1, host.clientHeight),
-    preference: 'webgl', autoDensity: true, antialias: true, autoStart: false,
+    preference: 'webgl', failIfMajorPerformanceCaveat: false, autoDensity: true, antialias: true, autoStart: false,
     resolution: Math.min(devicePixelRatio || 1, 2), background: 0x171b25 });
   host.append(app.canvas);
   app.canvas.setAttribute('aria-hidden', 'true');
+  app.canvas.dataset.renderer = app.renderer.name;
 
   let panel: Panel | null = null;
   let selectedTown = 0;
