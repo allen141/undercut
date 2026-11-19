@@ -195,6 +195,7 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await page.getByRole('button', { name: /Saffron Counter/ }).click();
   await expectRevision(page, 13);
   expect((await campaignSnapshot(page)).state.log).toHaveLength(8);
+  await activate(page, 'Day’s takings');
   await activate(page, 'Begin day 2');
   await expectRevision(page, 14);
   if (info.project.name === 'mobile-chromium') {

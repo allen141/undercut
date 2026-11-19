@@ -260,7 +260,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, props:
       const [id, title] = primary;
       const w = narrow ? 164 : 205;
       const bx = Math.max(margin, Math.min(width - w - margin, layout.bell.x + (layout.bell.w - w) / 2));
-      const by = Math.min(height - 103, Math.max(114, layout.bell.y + layout.bell.h - 10));
+      const by = Math.min(height - 103, Math.max(114, layout.bell.y + layout.bell.h + (narrow ? 12 : -10)));
       control(id, title, rectangle(bx, by, w, 44), () => {
         if (id === 'report') open('ledger', 'report');
         else p.send({ type: id as 'open' | 'serve' | 'close' });
