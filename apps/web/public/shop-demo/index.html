@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1b1d2c">
+  <title>Undercut – Shop Demo</title>
+  <link rel="stylesheet" href="./shop.css">
+  <script src="./shop.js" defer></script>
+</head>
+<body>
+<main>
+<div id="undercut-room" aria-label="Undercut interactive shop design">
+  <div class="ur-stage">
+    <div class="ur-floor" aria-hidden="true"></div>
+    <div class="ur-beam" aria-hidden="true"></div>
+    <div class="ur-hud"><span data-day>Day 1</span><span data-town>Between towns</span><span data-gold>◈ 100g</span></div>
+    <div class="ur-halo" aria-hidden="true"></div>
+    <div class="ur-lamp" aria-hidden="true"></div>
+    <button type="button" class="ur-door cursor-interaction" data-action="door" aria-label="Turn the door dial">
+      <span class="ur-dial" aria-hidden="true">✧</span><span class="ur-knob" aria-hidden="true"></span><span class="ur-tag" data-door>Turn the dial</span>
+    </button>
+    <div class="ur-shelves" aria-label="Display shelves">
+      <button type="button" class="ur-shelf cursor-interaction" data-action="shelf-0"><span class="ur-goods" aria-hidden="true"></span><span data-shelf>Empty shelf</span></button>
+      <button type="button" class="ur-shelf cursor-interaction" data-action="shelf-1"><span class="ur-goods" aria-hidden="true"></span><span data-shelf>Empty shelf</span></button>
+      <button type="button" class="ur-shelf cursor-interaction" data-action="shelf-2"><span class="ur-goods" aria-hidden="true"></span><span data-shelf>Empty shelf</span></button>
+    </div>
+    <div class="ur-visitor" aria-hidden="true" hidden><i></i></div>
+    <div class="ur-counter">
+      <button type="button" class="ur-book cursor-interaction" data-action="book">Ledger</button>
+      <button type="button" class="ur-crate cursor-interaction" data-action="crate">Wholesaler</button>
+      <button type="button" class="ur-bell cursor-interaction" data-action="bell" data-bell>Open shop</button>
+    </div>
+    <div class="ur-tip" role="status">Turn the dial to choose a town.</div>
+    <section class="ur-panel" aria-label="Shop controls" hidden></section>
+  </div>
+</div>
+</main>
+</body>
+</html>
