@@ -13,7 +13,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     // Use the real reduced-motion mode so software WebGL does not redraw decorative animation throughout every assertion.
-    reducedMotion: 'reduce',
+    contextOptions: { reducedMotion: 'reduce' },
   },
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 960 }, launchOptions: softwareWebGL } },

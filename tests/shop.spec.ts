@@ -256,7 +256,7 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
   expect(requests[0]).toEqual(requests[1]);
   await page.unroute('**/commands');
 
-  const other = await browser.newContext({ baseURL });
+  const other = await browser.newContext({ baseURL, reducedMotion: 'reduce' });
   try {
     const secondPage = await other.newPage();
     await secondPage.goto('/');
