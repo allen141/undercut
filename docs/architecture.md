@@ -2,7 +2,7 @@
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/web` | React application and a Pixi shop scene, built with Vite |
+| `apps/web` | React account and campaign screens and the full-screen PixiJS shop, built with Vite |
 | `apps/api` | Fastify HTTP API, Better Auth, database access and operator commands |
 | `packages/game-core` | Deterministic game transitions, town and goods definitions, inventory accounting |
 | `packages/contracts` | Shared Zod validation and command types |

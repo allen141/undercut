@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import { expect, test as base, type Page } from '@playwright/test';
 import { Pool } from 'pg';
 import type { CommandRequest } from '@undercut/contracts';
+import { quantity, type State } from '@undercut/game-core';
 
 const run = promisify(execFile);
 const password = 'browser-test-credential-41';
@@ -57,51 +58,118 @@ async function signIn(page: Page, email: string, passwordToUse = password) {
   await expect(page.getByRole('heading', { name: 'Your campaigns' })).toBeVisible();
 }
 
+const shopCanvas = (page: Page) => page.locator('canvas');
+const action = (page: Page, name: string | RegExp) =>
+  page.locator('[data-canvas-action]').and(page.getByRole('button', { name, exact: typeof name === 'string' }));
+
+async function activate(page: Page, name: string | RegExp) {
+  const button = action(page, name);
+  await expect(button).toBeEnabled();
+  const rect = await button.boundingBox();
+  if (!rect) throw new Error(`Canvas action is outside the viewport: ${name}`);
+  const [x, y] = [rect.x + rect.width / 2, rect.y + rect.height / 2];
+  if (test.info().project.use.hasTouch) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
+}
+
 async function createCampaign(page: Page, name: string) {
   await page.getByLabel('Shop name').fill(name);
   await page.getByRole('button', { name: 'Create campaign' }).click();
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  await expect(shopCanvas(page)).toBeVisible();
   await expectRevision(page, 0);
 }
 
+async function campaignSnapshot(page: Page) {
+  const name = await page.locator('.canvas-game').getAttribute('aria-label');
+  const campaigns = await (await page.request.get('/api/v1/campaigns')).json() as { id: string; name: string }[];
+  const current = campaigns.find(campaign => campaign.name === name);
+  if (!current) throw new Error(`Could not find active campaign ${name}`);
+  const response = await page.request.get(`/api/v1/campaigns/${current.id}`);
+  expect(response.ok()).toBeTruthy();
+  return await response.json() as { state: State };
+}
+
 async function expectRevision(page: Page, revision: number) {
-  await expect(page.getByText(`Saved · revision ${revision}`, { exact: true })).toBeVisible();
+  await expect(page.locator('.canvas-game')).toHaveAttribute('data-revision', String(revision));
+  await expect(page.locator('.canvas-game')).toHaveAttribute('aria-busy', 'false');
 }
 
 async function expectStock(page: Page, good: string, amount: number) {
-  await expect(page.locator(`[data-good="${good}"] b`)).toHaveText(String(amount));
+  const { state } = await campaignSnapshot(page);
+  expect(quantity(state, good)).toBe(amount);
+}
+
+async function chooseTown(page: Page, name: string, keyboard = false) {
+  if (keyboard) {
+    const dial = action(page, 'Turn the door dial');
+    await dial.focus();
+    await expect(dial).toBeFocused();
+    await page.keyboard.press('Enter');
+  } else {
+    await activate(page, 'Turn the door dial');
+  }
+  await activate(page, 'Preview ' + name);
+  await activate(page, 'Choose ' + name);
+}
+
+async function buy(page: Page, good: string, quantity = 1) {
+  if (!(await action(page, 'Select ' + good).count())) await activate(page, 'Wholesaler');
+  await activate(page, 'Select ' + good);
+  for (let i = 1; i < quantity; i++) await activate(page, 'Increase quantity');
+  await activate(page, 'Buy ' + good);
 }
 
 async function setShelf(page: Page, slot: number, good: string, price: number, revision: number) {
-  await page.getByRole('button', { name: new RegExp(`^Shelf ${slot} `) }).click();
-  await page.getByLabel('Display good').selectOption(good);
-  await page.getByLabel('Price per item').fill(String(price));
-  await page.getByRole('button', { name: `Save shelf ${slot}`, exact: true }).click();
+  if (await action(page, 'Close panel').count()) await activate(page, 'Close panel');
+  await activate(page, `Shelf ${slot}`);
+  await activate(page, `Display ${good[0].toUpperCase()}${good.slice(1)}`);
+  await activate(page, 'Price per item');
+  await activate(page, 'Clear price');
+  for (const digit of String(price)) await activate(page, 'Digit ' + digit);
+  await activate(page, 'Done');
+  await activate(page, `Save shelf ${slot}`);
   await expectRevision(page, revision);
 }
 
 async function serveAndClose(page: Page, openingRevision: number) {
-  await page.getByRole('button', { name: 'Open the shop' }).click();
+  await activate(page, 'Open the shop');
   await expectRevision(page, openingRevision);
   for (let i = 1; i <= 8; i++) {
-    await expect(page.getByText(`CUSTOMER ${i} OF 8`, { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Serve customer', exact: true }).click();
+    await activate(page, 'Serve customer');
     await expectRevision(page, openingRevision + i);
   }
-  await page.getByRole('button', { name: 'Close & review day' }).click();
-  await expect(page.getByRole('heading', { name: 'Daily report' })).toBeVisible();
-  await expect(page.locator('.ledger li')).toHaveCount(8);
+  await activate(page, 'Close & review day');
   await expectRevision(page, openingRevision + 9);
-  const report = page.locator('.report');
-  const value = async (label: string) => Number((await report.getByText(label, { exact: true })
-    .locator('xpath=following-sibling::dd').innerText()).replace('g', ''));
-  expect(await value('Trading profit')).toBe(await value('Sales revenue') - await value('Cost of goods sold'));
+  const { state } = await campaignSnapshot(page);
+  expect(state.phase).toBe('report');
+  expect(state.log).toHaveLength(8);
+  await expect(page.locator('[data-canvas-ledger] li')).toHaveCount(8);
+  await expect(page.locator('[data-canvas-report]')).toContainText(`${state.history.at(-1)?.profit}g`);
+  expect(state.history.at(-1)?.profit).toBe(state.revenue - state.costOfSales);
 }
 
 async function screenshot(page: Page, path: string) {
   await expectNoOverflow(page);
-  await expect.poll(() => page.locator('.scene canvas, .scene-error').count()).toBe(1);
-  await page.screenshot({ path, fullPage: true, animations: 'disabled' });
+  await expect(shopCanvas(page)).toHaveCount(1);
+  await expect(shopCanvas(page)).toBeVisible();
+  expect(await shopCanvas(page).evaluate((node: HTMLCanvasElement) =>
+    Boolean(node.getContext('webgl2') || node.getContext('webgl')))).toBeTruthy();
+  const visibleControls = await page.locator('button, input, select').evaluateAll(elements =>
+    elements.filter(element => {
+      const style = getComputedStyle(element);
+      const bounds = element.getBoundingClientRect();
+      return bounds.width > 0 && bounds.height > 0 && style.visibility === 'visible' &&
+        style.display !== 'none' && style.opacity !== '0' && style.clipPath === 'none';
+    }).map(element => element.textContent?.trim()),
+  );
+  expect(visibleControls).toEqual([]);
+  const canvas = await shopCanvas(page).boundingBox();
+  const viewport = page.viewportSize();
+  expect(canvas?.x).toBe(0);
+  expect(canvas?.y).toBe(0);
+  expect(canvas?.width).toBeCloseTo(viewport?.width ?? 0, 0);
+  expect(canvas?.height).toBeCloseTo(viewport?.height ?? 0, 0);
+  await page.screenshot({ path, animations: 'disabled' });
 }
 
 test('trades a full day and returns with its ledger and remaining stock', async ({ page, account }, info) => {
@@ -109,15 +177,10 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   const errors = captureErrors(page);
   await invite(page, account);
   await createCampaign(page, 'Saffron Counter');
-  await page.getByLabel('Market prices in Meadow').click();
-  const market = page.getByRole('table', { name: 'Meadow market prices' });
-  await expect(market.getByRole('row')).toHaveCount(7);
-  await expect(market.getByRole('row', { name: /Grain 3g/ })).toBeVisible();
   await screenshot(page, info.outputPath('01-travel.png'));
-  await page.getByRole('button', { name: 'Choose Meadow', exact: true }).click();
+  await chooseTown(page, 'Meadow');
   await expectRevision(page, 1);
-  await page.getByLabel('Quantity of Grain').fill('3');
-  await page.getByRole('button', { name: 'Buy Grain', exact: true }).click();
+  await buy(page, 'Grain', 3);
   await expectRevision(page, 2);
   await expectStock(page, 'grain', 3);
   await setShelf(page, 1, 'grain', 5, 3);
@@ -127,9 +190,17 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await page.reload();
   await page.getByRole('button', { name: /Saffron Counter/ }).click();
   await expectRevision(page, 13);
-  await expect(page.locator('.ledger li')).toHaveCount(8);
-  await page.getByRole('button', { name: 'Begin day 2' }).click();
+  expect((await campaignSnapshot(page)).state.log).toHaveLength(8);
+  await activate(page, 'Begin day 2');
   await expectRevision(page, 14);
+  if (info.project.name === 'mobile-chromium') {
+    await page.setViewportSize({ width: 740, height: 390 });
+    await chooseTown(page, 'Harbor');
+    await expectRevision(page, 15);
+    await buy(page, 'Tea');
+    await expectRevision(page, 16);
+    await screenshot(page, info.outputPath('04-landscape.png'));
+  }
   await expectNoOverflow(page);
   expect(errors).toEqual([]);
 });
@@ -139,11 +210,8 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
   const errors = captureErrors(page);
   await invite(page, account);
   await createCampaign(page, 'Lantern & Co.');
-  await page.getByLabel('Market prices in Meadow').click();
-  await expect(page.getByRole('table', { name: 'Meadow market prices' }).getByRole('row')).toHaveCount(7);
   await screenshot(page, info.outputPath('01-travel.png'));
-  await expect(page.locator('.scene canvas')).toBeVisible();
-  await page.getByRole('button', { name: 'Choose Meadow', exact: true }).click();
+  await chooseTown(page, 'Meadow', true);
   await expectRevision(page, 1);
 
   const requests: CommandRequest[] = [];
@@ -158,20 +226,18 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
     }
     await route.continue();
   });
-  await page.getByLabel('Quantity of Grain').fill('3');
-  await page.getByRole('button', { name: 'Buy Grain', exact: true }).click();
-  const confirm = page.getByRole('button', { name: 'Confirm last action' });
+  await buy(page, 'Grain', 3);
+  const confirm = action(page, 'Confirm last action');
   await expect(confirm).toBeEnabled();
   await expect(page.getByRole('alert')).toHaveText('Could not reach the server. Check your connection and try again.');
   await context.setOffline(true);
-  await expect(page.getByText('You’re offline. Reconnect to continue trading.')).toBeVisible();
-  await expect(confirm).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Buy Grain', exact: true })).toBeDisabled();
+  await expect(page.getByRole('status')).toContainText('offline');
+  await expect(confirm).toHaveCount(0);
   await context.setOffline(false);
   await page.reload();
   await page.getByRole('button', { name: /Lantern & Co\./ }).click();
   await expectStock(page, 'grain', 3);
-  await confirm.click();
+  await activate(page, 'Confirm last action');
   await expectRevision(page, 2);
   await expectStock(page, 'grain', 3);
   expect(requests).toHaveLength(2);
@@ -185,9 +251,9 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
     await signIn(secondPage, account.email);
     await secondPage.getByRole('button', { name: /Lantern & Co\./ }).click();
     await expectRevision(secondPage, 2);
-    await page.getByRole('button', { name: 'Buy Herbs', exact: true }).click();
+    await buy(page, 'Herbs');
     await expectRevision(page, 3);
-    await secondPage.getByRole('button', { name: 'Buy Tea', exact: true }).click();
+    await buy(secondPage, 'Tea');
     await expect(secondPage.getByRole('alert')).toContainText('changed on another device');
     await expectRevision(secondPage, 3);
     await expectStock(secondPage, 'herbs', 1);
@@ -196,7 +262,7 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
     await other.close();
   }
 
-  await page.getByRole('button', { name: 'Buy Cloth', exact: true }).click();
+  await buy(page, 'Cloth');
   await expectRevision(page, 4);
   await setShelf(page, 1, 'grain', 5, 5);
   await setShelf(page, 2, 'herbs', 8, 6);
@@ -205,28 +271,30 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
   await serveAndClose(page, 8);
   await screenshot(page, info.outputPath('03-meadow-report.png'));
 
-  await page.getByRole('button', { name: 'Begin day 2' }).click();
+  await activate(page, 'Begin day 2');
   await expectRevision(page, 18);
-  await page.getByRole('button', { name: 'Choose Harbor', exact: true }).click();
+  await chooseTown(page, 'Harbor');
   await expectRevision(page, 19);
-  await page.getByLabel('Quantity of Tea').fill('2');
-  await page.getByRole('button', { name: 'Buy Tea', exact: true }).click();
+  await buy(page, 'Tea', 2);
   await expectRevision(page, 20);
   await setShelf(page, 1, 'tea', 12, 21);
   await serveAndClose(page, 22);
   await screenshot(page, info.outputPath('04-harbor-report.png'));
 
-  await page.getByRole('button', { name: 'All campaigns' }).click();
+  if (await action(page, 'Close panel').count()) await activate(page, 'Close panel');
+  await activate(page, 'All campaigns');
   await createCampaign(page, 'Second Ledger');
-  await expect(page.getByText('100g', { exact: true })).toBeVisible();
+  expect((await campaignSnapshot(page)).state.gold).toBe(100);
   await expectStock(page, 'tea', 0);
+  if (await action(page, 'Close panel').count()) await activate(page, 'Close panel');
+  await activate(page, 'All campaigns');
   await page.getByRole('button', { name: 'Sign out' }).click();
   await signIn(page, account.email);
   await expect(page.getByRole('button', { name: /Second Ledger/ })).toBeVisible();
   await page.getByRole('button', { name: /Lantern & Co\./ }).click();
   await expectRevision(page, 31);
-  await expect(page.getByRole('heading', { name: 'Daily report' })).toBeVisible();
-  await expect(page.locator('.ledger li')).toHaveCount(8);
+  expect((await campaignSnapshot(page)).state.phase).toBe('report');
+  expect((await campaignSnapshot(page)).state.log).toHaveLength(8);
 
   if (!process.env.BETTER_AUTH_SECRET) throw new Error('Set BETTER_AUTH_SECRET to the test API’s secret to exercise operator password reset.');
   const { stdout } = await run(process.execPath, ['--import', 'tsx', 'apps/api/src/operator.ts', 'reset', account.email], {

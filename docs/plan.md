@@ -13,7 +13,7 @@ Each day follows the shop loop.
 3. Open the shop and serve eight customers. Sales depend on demand, price, and availability.
 4. Close the shop and review revenue, first-in-first-out cost of goods sold, profit, and wholesale spending. Start another day with the remaining inventory and gold.
 
-The shop works on desktop and portrait mobile. Market information and interactive controls stay available through regular browser UI. The shop scene visualizes the day without requiring players to interact with a canvas.
+The shop works on desktop and portrait mobile. The active shop fills the viewport with a PixiJS WebGL canvas. The door dial, market, shelves, counter, and ledger carry the day’s actions. Keyboard and assistive technology can reach the canvas controls through semantic controls. Account forms and campaign selection use native browser controls.
 
 Public registration, multiplayer, offline writes, world simulation, branching story events, and cross-campaign rewards are outside this milestone.
 

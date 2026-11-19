@@ -4,7 +4,7 @@ const softwareWebGL = { args: ['--use-gl=angle', '--use-angle=swiftshader', '--e
 
 export default defineConfig({
   testDir: './tests',
-  timeout: 90_000,
+  timeout: 150_000,
   expect: { timeout: 10_000 },
   // The disposable stack also uses the production API's per-client rate limits.
   workers: 1,
