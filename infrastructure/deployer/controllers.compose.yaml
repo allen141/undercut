@@ -1,0 +1,36 @@
+services:
+  preview:
+    image: undercut-deployer:local
+    build:
+      context: ../..
+      dockerfile: infrastructure/deployer/Dockerfile
+    container_name: undercut-deployer-preview
+    restart: unless-stopped
+    environment:
+      CHANNEL: preview
+      POLL_SECONDS: "60"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /mnt/user/appdata/undercut:/mnt/user/appdata/undercut
+      - /mnt/user/appdata/undercut/deployer/preview:/state
+      - /mnt/user/appdata/undercut/preview/environment.env:/config/environment.env:ro
+      - /mnt/user/appdata/undercut/preview/secrets.env:/config/secrets.env:ro
+      - /mnt/user/appdata/undercut/registry:/root/.docker:ro
+
+  production:
+    image: undercut-deployer:local
+    build:
+      context: ../..
+      dockerfile: infrastructure/deployer/Dockerfile
+    container_name: undercut-deployer-production
+    restart: unless-stopped
+    environment:
+      CHANNEL: production
+      POLL_SECONDS: "60"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /mnt/user/appdata/undercut:/mnt/user/appdata/undercut
+      - /mnt/user/appdata/undercut/deployer/production:/state
+      - /mnt/user/appdata/undercut/production/environment.env:/config/environment.env:ro
+      - /mnt/user/appdata/undercut/production/secrets.env:/config/secrets.env:ro
+      - /mnt/user/appdata/undercut/registry:/root/.docker:ro

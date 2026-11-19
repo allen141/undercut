@@ -1,6 +1,6 @@
 # Undercut
 
-Undercut is a browser-based trading game about growing a traveling shop. The longer-term game will let a merchant influence settlements and nations through economic choices, with branching outcomes inside each campaign.
+Undercut is a browser-based trading game about growing a traveling shop. The longer-term, narrative-led game will let a merchant influence settlements and nations through economic choices, with branching outcomes inside each campaign.
 
 ## First milestone
 

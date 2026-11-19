@@ -1,0 +1,204 @@
+name: Application
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: application-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILD_VERSION: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  source:
+    name: Type, domain, and API checks
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: undercut
+          POSTGRES_PASSWORD: local-integration-only
+          POSTGRES_DB: undercut
+        ports: ["5438:5432"]
+        options: >-
+          --health-cmd "pg_isready -U undercut -d undercut"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://undercut:local-integration-only@localhost:5438/undercut
+      TEST_DATABASE_URL: postgres://undercut:local-integration-only@localhost:5438/undercut
+      APP_ORIGIN: http://localhost:5180
+      BETTER_AUTH_SECRET: local-integration-only-not-for-hosted-environments
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.BUILD_VERSION }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm db:migrate
+      - run: pnpm test:integration
+      - run: pnpm build
+
+  container:
+    name: Container and browser checks
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: http://localhost:5180
+      APP_ORIGIN: http://localhost:5180
+      DATABASE_URL: postgres://undercut:local-development-only@localhost:5438/undercut
+      TEST_DATABASE_URL: postgres://undercut:local-development-only@localhost:5438/undercut
+      BETTER_AUTH_SECRET: local-development-only-not-for-hosted-environments
+      DOCKER_DEFAULT_PLATFORM: linux/amd64
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.BUILD_VERSION }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Build and start the release images
+        run: |
+          docker compose -f infrastructure/compose.yaml build api web
+          docker compose -f infrastructure/compose.yaml up --detach --no-build --wait --wait-timeout 120
+      - name: Check the app through its proxy
+        run: |
+          curl --fail --silent --show-error --output /dev/null "$BASE_URL/"
+          curl --fail --silent --show-error "$BASE_URL/api/v1/health/live" | jq -e '.ok == true'
+          curl --fail --silent --show-error "$BASE_URL/api/v1/health/ready" | jq -e '.ok == true'
+          curl --fail --silent --show-error "$BASE_URL/api/v1/health/version" | jq -e --arg commit "$BUILD_VERSION" '.commit == $commit'
+      - run: pnpm test:browser
+      - name: Save tested images
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: docker save undercut-api:local undercut-web:local | gzip > undercut-images.tar.gz
+      - uses: actions/upload-artifact@v7.0.1
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          name: undercut-images-${{ env.BUILD_VERSION }}
+          path: undercut-images.tar.gz
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+      - if: failure()
+        run: docker compose -f infrastructure/compose.yaml logs --no-color
+      - if: always()
+        run: docker compose -f infrastructure/compose.yaml down --volumes
+
+  controller:
+    name: Deployment policy checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.BUILD_VERSION }}
+          persist-credentials: false
+      - run: docker build -f infrastructure/deployer/Dockerfile -t undercut-deployer:test .
+      - run: infrastructure/deployer/tests/controller-test.sh undercut-deployer:test
+
+  publish:
+    name: Publish and verify deployment
+    needs: [source, container, controller]
+    if: >-
+      (github.event_name != 'pull_request' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: undercut-delivery-${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      API_REPOSITORY: ghcr.io/allen141/undercut-api
+      WEB_REPOSITORY: ghcr.io/allen141/undercut-web
+      RELEASE_REPOSITORY: ghcr.io/allen141/undercut-release
+      CHANNEL: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+      BUILD_PR_NUMBER: ${{ github.event.pull_request.number }}
+      SITE_URL: ${{ github.event_name == 'pull_request' && 'https://undercut-preview.tylerallen.net' || 'https://undercut.tylerallen.net' }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.BUILD_VERSION }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: undercut-images-${{ env.BUILD_VERSION }}
+          path: release-assets
+      - uses: docker/setup-buildx-action@v4.2.0
+      - uses: sigstore/cosign-installer@v4.1.2
+        with:
+          cosign-release: v3.1.2
+      - uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the tested API and web images
+        run: |
+          docker load --input release-assets/undercut-images.tar.gz
+          push_image() {
+            local local_tag=$1 repository=$2 env_key=$3
+            local tag="$repository:sha-$BUILD_VERSION" image
+            test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$local_tag")" = "$BUILD_VERSION"
+            test "$(docker image inspect --format '{{.Architecture}}' "$local_tag")" = amd64
+            docker tag "$local_tag" "$tag"
+            docker push "$tag"
+            image=$(docker image inspect --format '{{index .RepoDigests 0}}' "$tag")
+            [[ "$image" =~ ^"$repository"@sha256:[0-9a-f]{64}$ ]]
+            cosign sign --yes "$image"
+            echo "$env_key=$image" >> "$GITHUB_ENV"
+          }
+          push_image undercut-api:local "$API_REPOSITORY" API_IMAGE
+          push_image undercut-web:local "$WEB_REPOSITORY" WEB_IMAGE
+      - name: Sign and promote the release
+        run: |
+          release_tag="$RELEASE_REPOSITORY:sha-$BUILD_VERSION"
+          docker build --platform linux/amd64 --tag "$release_tag" \
+            --build-arg "CHANNEL=$CHANNEL" --build-arg "BUILD_VERSION=$BUILD_VERSION" \
+            --build-arg "BUILD_PR_NUMBER=$BUILD_PR_NUMBER" \
+            --build-arg "API_IMAGE=$API_IMAGE" --build-arg "WEB_IMAGE=$WEB_IMAGE" \
+            --file infrastructure/release/Dockerfile .
+          docker push "$release_tag"
+          release=$(docker image inspect --format '{{index .RepoDigests 0}}' "$release_tag")
+          [[ "$release" =~ ^"$RELEASE_REPOSITORY"@sha256:[0-9a-f]{64}$ ]]
+          cosign sign --yes "$release"
+          docker buildx imagetools create --prefer-index=false --tag "$RELEASE_REPOSITORY:$CHANNEL" "$release"
+          {
+            printf '### %s release\n\n' "$CHANNEL"
+            printf -- '- Commit `%s`\n- API `%s`\n- Web `%s`\n- Release `%s`\n' "$BUILD_VERSION" "$API_IMAGE" "$WEB_IMAGE" "$release"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Wait for the host to deploy the signed release
+        run: |
+          for attempt in {1..48}; do
+            if curl --fail --silent --max-time 5 "$SITE_URL/api/v1/health/version" \
+                | jq -e --arg commit "$BUILD_VERSION" --arg pr "$BUILD_PR_NUMBER" \
+                    '.commit == $commit and (.pullRequest // "") == $pr' >/dev/null \
+                && curl --fail --silent --max-time 5 "$SITE_URL/api/v1/health/ready" \
+                    | jq -e '.ok == true' >/dev/null; then
+              printf 'Verified %s on %s\n' "$BUILD_VERSION" "$SITE_URL"
+              exit 0
+            fi
+            sleep 10
+          done
+          printf 'Published release did not become healthy at %s\n' "$SITE_URL" >&2
+          exit 1

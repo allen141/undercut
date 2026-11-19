@@ -1,0 +1,5 @@
+CONTAINER_PREFIX=undercut-production
+ENV_ROOT=/mnt/user/appdata/undercut/production
+SECRETS_FILE=/mnt/user/appdata/undercut/production/secrets.env
+COMPOSE_PROJECT_NAME=undercut-production
+APP_ORIGIN=https://undercut.tylerallen.net

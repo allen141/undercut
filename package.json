@@ -1,0 +1,45 @@
+{
+  "name": "undercut",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --config apps/web/vite.config.ts",
+    "dev:api": "tsx watch apps/api/src/server.ts",
+    "build": "vite build --config apps/web/vite.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test packages/game-core/src/*.test.ts",
+    "test:integration": "tsx --test apps/api/tests/*.test.ts",
+    "test:browser": "playwright test",
+    "db:migrate": "tsx apps/api/src/migrate.ts",
+    "operator": "tsx apps/api/src/operator.ts"
+  },
+  "dependencies": {
+    "@fastify/rate-limit": "11.2.2",
+    "@undercut/contracts": "workspace:*",
+    "@undercut/game-core": "workspace:*",
+    "better-auth": "1.7.26",
+    "drizzle-orm": "0.45.4",
+    "fastify": "5.12.8",
+    "pg": "8.23.1",
+    "pixi.js": "8.23.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "26.6.6",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "drizzle-kit": "0.31.11",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.8"
+  }
+}

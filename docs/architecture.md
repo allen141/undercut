@@ -12,7 +12,7 @@ The browser and API share an origin. Session cookies establish ownership. A host
 
 PostgreSQL stores identity, campaigns, and command receipts. Drizzle maps data to the TypeScript application. Committed SQL migrations run before a candidate API starts. Hosted migrations must keep the previous API usable so that reverting application images remains safe.
 
-Each campaign has a server-authoritative snapshot, rules version, and revision. The API validates command inputs, locks the campaign row in a transaction, checks ownership, and applies the domain transition together with its receipt. The client supplies a unique action ID and expected revision. The same accepted action can return its saved response on retry. A stale revision is rejected so the browser can reload server state before it submits a new decision.
+Each campaign has a server-authoritative snapshot, rules version, and revision. The API validates command inputs, locks the campaign row in a transaction, checks ownership, and applies the domain transition together with its receipt. The client supplies a unique action ID and expected revision. A retry of the same accepted action returns the current snapshot without applying the command again. A stale revision is rejected so the browser can reload server state before it submits a new decision.
 
 Random customer behavior derives from the campaign seed, town, and day. The browser renders the response and requests the next action. A reload resumes the saved phase, inventory, and day without relying on browser storage.
 

@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+test "$1" = verify
+printf 'cosign %s\n' "$*" >> "$FAKE_DOCKER_LOG"
+test "$TEST_SCENARIO" != signature

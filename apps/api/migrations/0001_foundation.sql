@@ -1,0 +1,11 @@
+CREATE TABLE auth_user (id text PRIMARY KEY,name text NOT NULL,email text NOT NULL UNIQUE,email_verified boolean NOT NULL DEFAULT false,image text,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE auth_session (id text PRIMARY KEY,expires_at timestamptz NOT NULL,token text NOT NULL UNIQUE,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),ip_address text,user_agent text,user_id text NOT NULL REFERENCES auth_user(id) ON DELETE CASCADE);
+CREATE INDEX session_user_idx ON auth_session(user_id);
+CREATE TABLE auth_account (id text PRIMARY KEY,account_id text NOT NULL,provider_id text NOT NULL,user_id text NOT NULL REFERENCES auth_user(id) ON DELETE CASCADE,access_token text,refresh_token text,id_token text,access_token_expires_at timestamptz,refresh_token_expires_at timestamptz,scope text,password text,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),UNIQUE(provider_id,account_id));
+CREATE INDEX account_user_idx ON auth_account(user_id);
+CREATE TABLE auth_verification (id text PRIMARY KEY,identifier text NOT NULL,value text NOT NULL,expires_at timestamptz NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX verification_identifier_idx ON auth_verification(identifier);
+CREATE TABLE invitations (token_hash text PRIMARY KEY,email text NOT NULL,expires_at timestamptz NOT NULL,used_at timestamptz);
+CREATE TABLE campaigns (id uuid PRIMARY KEY,user_id text NOT NULL REFERENCES auth_user(id) ON DELETE CASCADE,name text NOT NULL,revision integer NOT NULL DEFAULT 0 CHECK(revision>=0),state jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX campaign_owner_idx ON campaigns(user_id);
+CREATE TABLE command_receipts (campaign_id uuid NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,action_id uuid NOT NULL,request_hash text NOT NULL,response jsonb NOT NULL,PRIMARY KEY(campaign_id,action_id));

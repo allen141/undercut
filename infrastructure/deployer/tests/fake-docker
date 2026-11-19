@@ -1,0 +1,76 @@
+#!/bin/sh
+
+test -z "${FAKE_DOCKER_LOG:-}" || printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
+
+scenario=${TEST_SCENARIO:-cleanup}
+registry=ghcr.io/allen141
+candidate="$registry/undercut-release@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+candidate_api="$registry/undercut-api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+candidate_web="$registry/undercut-web@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+
+if test "${1:-}" = pull; then
+  test "$scenario" != cleanup
+  exit $?
+fi
+
+if test "$scenario" != cleanup; then
+  case "$*" in
+    'image inspect --format {{index .RepoDigests 0}} '*)
+      printf '%s\n' "$candidate"; exit 0 ;;
+    'image inspect '*undercut.channel*)
+      printf '%s\n' preview; exit 0 ;;
+    'image inspect '*undercut.api*)
+      if test "$scenario" = allowlist; then
+        printf '%s\n' "ghcr.io/other/undercut-api@${candidate_api#*@}"
+      elif test "$scenario" = swapped-roles; then
+        printf '%s\n' "$candidate_web"
+      else
+        printf '%s\n' "$candidate_api"
+      fi
+      exit 0 ;;
+    'image inspect '*undercut.web*)
+      printf '%s\n' "$candidate_web"; exit 0 ;;
+    'image inspect '*org.opencontainers.image.revision*)
+      printf '%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; exit 0 ;;
+    'image inspect '*undercut.pr*)
+      printf '%s\n' 17; exit 0 ;;
+    'compose '*migrate.ts)
+      test "$scenario" != migration; exit $? ;;
+    'compose '*up' --detach api web')
+      printf 'activated %s %s\n' "$API_IMAGE" "$WEB_IMAGE" >> "$FAKE_DOCKER_LOG"
+      exit 0 ;;
+    'compose '*up' --detach db')
+      exit 0 ;;
+    'inspect '*)
+      printf '%s\n' healthy; exit 0 ;;
+    'exec '*health/ready)
+      test "$scenario" != readiness; exit $? ;;
+  esac
+fi
+
+if test "${1:-} ${2:-}" = "image inspect"; then
+  case "$*" in
+    *aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa*) printf '%s\n' sha256:1111111111111111111111111111111111111111111111111111111111111111 ;;
+    *ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff*) printf '%s\n' sha256:6666666666666666666666666666666666666666666666666666666666666666 ;;
+    *eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee*) printf '%s\n' sha256:5555555555555555555555555555555555555555555555555555555555555555 ;;
+    *) exit 1 ;;
+  esac
+  exit 0
+fi
+
+if test "${1:-} ${2:-}" = "image ls"; then
+  cat <<'EOF'
+ghcr.io/allen141/undercut-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa sha256:1111111111111111111111111111111111111111111111111111111111111111
+ghcr.io/allen141/undercut-api@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd sha256:4444444444444444444444444444444444444444444444444444444444444444
+ghcr.io/allen141/undercut-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb sha256:2222222222222222222222222222222222222222222222222222222222222222
+postgres@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc sha256:3333333333333333333333333333333333333333333333333333333333333333
+EOF
+  exit 0
+fi
+
+if test "${1:-} ${2:-}" = "image rm" || test "${1:-} ${2:-}" = "image prune"; then
+  exit 0
+fi
+
+echo "Unexpected docker invocation: $*" >&2
+exit 9

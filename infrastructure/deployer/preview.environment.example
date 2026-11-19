@@ -1,0 +1,5 @@
+CONTAINER_PREFIX=undercut-preview
+ENV_ROOT=/mnt/user/appdata/undercut/preview
+SECRETS_FILE=/mnt/user/appdata/undercut/preview/secrets.env
+COMPOSE_PROJECT_NAME=undercut-preview
+APP_ORIGIN=https://undercut-preview.tylerallen.net

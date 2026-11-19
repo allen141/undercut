@@ -1,0 +1,47 @@
+name: undercut-local
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: undercut
+      POSTGRES_PASSWORD: local-development-only
+      POSTGRES_DB: undercut
+    ports: ["127.0.0.1:5438:5432"]
+    volumes: [local-db:/var/lib/postgresql]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U undercut"]
+      interval: 2s
+      retries: 30
+  migrate:
+    image: undercut-api:local
+    build: &api-build
+      context: ..
+      dockerfile: infrastructure/api.Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-local}
+    environment: &api-env
+      DATABASE_URL: postgres://undercut:local-development-only@db:5432/undercut
+      BETTER_AUTH_SECRET: local-development-only-not-for-hosted-environments
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:5180}
+    command: [node, --import, tsx, apps/api/src/migrate.ts]
+    depends_on:
+      db: {condition: service_healthy}
+  api:
+    image: undercut-api:local
+    build: *api-build
+    environment: *api-env
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  web:
+    image: undercut-web:local
+    build:
+      context: ..
+      dockerfile: infrastructure/web.Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-local}
+    ports: ["127.0.0.1:5180:8080"]
+    depends_on:
+      api: {condition: service_healthy}
+volumes:
+  local-db:
