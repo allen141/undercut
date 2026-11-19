@@ -154,6 +154,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish the tested API and web images
+        shell: bash
         run: |
           docker load --input release-assets/undercut-images.tar.gz
           push_image() {
@@ -163,7 +164,7 @@ jobs:
             test "$(docker image inspect --format '{{.Architecture}}' "$local_tag")" = amd64
             docker tag "$local_tag" "$tag"
             docker push "$tag"
-            image=$(docker image inspect --format '{{index .RepoDigests 0}}' "$tag")
+            image="$repository@$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$tag" | jq -er .digest)"
             [[ "$image" =~ ^"$repository"@sha256:[0-9a-f]{64}$ ]]
             cosign sign --yes "$image"
             echo "$env_key=$image" >> "$GITHUB_ENV"
@@ -171,6 +172,7 @@ jobs:
           push_image undercut-api:local "$API_REPOSITORY" API_IMAGE
           push_image undercut-web:local "$WEB_REPOSITORY" WEB_IMAGE
       - name: Sign and promote the release
+        shell: bash
         run: |
           release_tag="$RELEASE_REPOSITORY:sha-$BUILD_VERSION"
           docker build --platform linux/amd64 --tag "$release_tag" \
@@ -179,7 +181,7 @@ jobs:
             --build-arg "API_IMAGE=$API_IMAGE" --build-arg "WEB_IMAGE=$WEB_IMAGE" \
             --file infrastructure/release/Dockerfile .
           docker push "$release_tag"
-          release=$(docker image inspect --format '{{index .RepoDigests 0}}' "$release_tag")
+          release="$RELEASE_REPOSITORY@$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$release_tag" | jq -er .digest)"
           [[ "$release" =~ ^"$RELEASE_REPOSITORY"@sha256:[0-9a-f]{64}$ ]]
           cosign sign --yes "$release"
           docker buildx imagetools create --prefer-index=false --tag "$RELEASE_REPOSITORY:$CHANNEL" "$release"
