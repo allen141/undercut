@@ -199,7 +199,12 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await activate(page, 'Begin day 2');
   await expectRevision(page, 14);
   if (info.project.name === 'mobile-chromium') {
+    const dial = action(page, 'Turn the door dial');
+    const portraitDial = await dial.boundingBox();
     await page.setViewportSize({ width: 740, height: 390 });
+    await expect.poll(() => shopCanvas(page).boundingBox()).toMatchObject({ width: 740, height: 390 });
+    // Pixi rebuilds the room through ResizeObserver after the browser viewport changes.
+    await expect.poll(() => dial.boundingBox()).not.toEqual(portraitDial);
     await chooseTown(page, 'Harbor');
     await expectRevision(page, 15);
     await buy(page, 'Tea');
