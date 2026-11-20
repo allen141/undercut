@@ -4,34 +4,44 @@ import { GOODS, TOWNS, quantity, type GoodId, type State } from '@undercut/game-
 export type Bounds = { x: number; y: number; w: number; h: number };
 export function roomLayout(width: number, height: number) {
   const narrow = width < 660;
-  const horizon = Math.round(height * .68);
-  const doorW = Math.min(width * (narrow ? .34 : .23), height * .37);
-  const dialSize = Math.max(46, Math.min(doorW * .46, 92));
-  const doorH = Math.min(height * .51, doorW * 1.87, Math.max(doorW * .56, horizon - 71 - dialSize * .73));
-  const door = { x: width * (narrow ? .085 : .175), y: horizon - doorH, w: doorW, h: doorH };
-  const dial = { x: door.x + door.w / 2 - dialSize / 2, y: door.y - dialSize * .73, w: dialSize, h: dialSize };
-  const sx = width * (narrow ? .505 : .52);
-  const shelfW = width * (narrow ? .425 : .30);
-  const shelfH = Math.min(78, height * .12);
+  const horizon = Math.round(height * .65);
+  const doorW = Math.min(width * .20, horizon * .66);
+  const doorH = Math.min(horizon - 88, Math.max(height * .33, doorW * 1.7));
+  const door = { x: width * .045, y: horizon - doorH, w: doorW, h: doorH };
+  const dialSize = Math.max(44, Math.min(doorW * .54, 88));
+  const dial = { x: door.x + (door.w - dialSize) / 2, y: door.y + door.h * .43, w: dialSize, h: dialSize };
+  const bayY = Math.max(82, height * .115);
+  const bay = { x: width * .34, y: bayY, w: width * .61, h: horizon - bayY - height * .105 };
+  const shelfW = Math.min(width * (narrow ? .25 : .19), height * .29);
+  const shelfH = Math.min(85, height * .12);
   const shelves = [0, 1, 2].map(i => ({
-    x: sx, y: horizon - height * (.43 - i * .132), w: shelfW, h: shelfH,
+    x: width * (narrow ? .13 + i * .255 : .31 + i * .208), y: horizon + height * .026,
+    w: shelfW, h: shelfH,
   }));
-  const counterW = Math.min(width * .77, height * 1.2);
-  const counter = { x: (width - counterW) / 2, y: height * .78, w: counterW, h: height * .129 };
-  const crateW = Math.max(50, Math.min(counterW * .21, 122));
-  const crate = { x: counter.x + counter.w * .10, y: counter.y - 33, w: crateW, h: 53 };
-  const bell = { x: counter.x + counter.w * .51 - 24, y: counter.y - 29, w: 48, h: 49 };
-  const ledger = { x: counter.x + counter.w * .76, y: counter.y - 25, w: Math.max(50, counterW * .16), h: 47 };
-  const visitor = { x: counter.x + counter.w * .50 - 29, y: counter.y - height * .19, w: 58, h: height * .18 };
-  return { door, dial, shelves, crate, counter, bell, ledger, visitor, horizon };
+  shelves.push({ x: bay.x + bay.w * .12, y: bay.y + bay.h - height * .077,
+    w: bay.w * .76, h: Math.max(44, height * .102) });
+  const counterW = Math.min(width * (narrow ? .83 : .53), height * 1.1);
+  const counter = { x: width * (narrow ? .09 : .07), y: height * .865, w: counterW, h: height * .13 };
+  const bell = { x: counter.x + counter.w * .70, y: counter.y - 32, w: 48, h: 49 };
+  const bookW = Math.max(104, Math.min(196, counterW * (narrow ? .45 : .54)));
+  const book = { x: counter.x + counter.w * .12, y: counter.y - 39, w: bookW, h: 63 };
+  const visitor = { x: width * .22, y: horizon - height * .15, w: 58, h: height * .18 };
+  return { door, dial, bay, shelves, counter, bell, book, visitor, horizon };
 }
 
 const brass = 0xc99557;
 const ink = 0x211723;
 const warm = 0xffcc84;
 const mutedGold = 0x895c4c;
-type ArtOptions = { townId?: string; selectedShelf?: number; time?: number };
+type ArtOptions = { townId?: string; selectedShelf?: number; bookOpen?: boolean };
 type Point = [number, number];
+
+export const phaseBooks = {
+  travel: { title: 'Route Atlas', cover: 0x315965, edge: 0x76b7b5, page: 0xe8dcb5 },
+  prepare: { title: 'Supplier Ledger', cover: 0x6a3c49, edge: 0xda9b87, page: 0xf0d8b6 },
+  open: { title: 'Shop Journal', cover: 0x486344, edge: 0xb4bd7a, page: 0xe5dbb0 },
+  report: { title: 'Accounts Book', cover: 0x574163, edge: 0xc8a5cf, page: 0xebe0c9 },
+} as const;
 
 function polygon(g: Graphics, points: Point[], color: number, alpha = 1) {
   g.poly(points.flat()).fill({ color, alpha });
@@ -97,7 +107,7 @@ function drawRoomBackground(g: Graphics, width: number, height: number, horizon:
   g.rect(width * .957, 0, width * .043, horizon).fill(0x302333);
   line(g, [width * .043, 0], [width * .043, horizon], 0xa77158, 3, .54);
   line(g, [width * .957, 0], [width * .957, horizon], 0xa77158, 3, .54);
-  for (const x of [width * .43, width * .91]) {
+  for (const x of [width * .291]) {
     const y = Math.max(85, horizon - height * .41);
     for (let i = 10; i > 0; i--) {
       g.ellipse(x, y, i * 8, i * 10).fill({ color: 0xffae66, alpha: .013 });
@@ -110,28 +120,58 @@ function drawRoomBackground(g: Graphics, width: number, height: number, horizon:
   }
 }
 
-function drawPortal(layer: Container, g: Graphics, door: Bounds, dial: Bounds, town: string | null, open: boolean, time: number) {
+function drawDoor(g: Graphics, door: Bounds, dial: Bounds, town: string | null, visiting: boolean) {
   const { x, y, w, h } = door;
-  const bounds = { x: x + 9, y: y + 9, w: w - 18, h: h - 9 };
-  const exterior = new Graphics();
-  const mask = arch(new Graphics(), bounds).fill(0xffffff);
-  exterior.mask = mask;
-  layer.addChild(exterior, mask);
-  arch(g, { x: x - 8, y: y - 7, w: w + 16, h: h + 13 }).stroke({ color: ink, width: 14 });
-  arch(g, door).stroke({ color: mutedGold, width: 12 });
-  arch(g, { x: x + 4, y: y + 4, w: w - 8, h: h - 2 }).stroke({ color: brass, width: 2 });
+  arch(g, { x: x - 5, y: y - 5, w: w + 10, h: h + 9 }).fill(ink);
+  arch(g, door).fill(0x754d45).stroke({ color: mutedGold, width: 9 });
+  arch(g, { x: x + 5, y: y + 5, w: w - 10, h: h - 5 }).stroke({ color: brass, width: 2 });
+  for (let i = 1; i <= 4; i++) {
+    const px = x + w * i / 5;
+    const top = y + w * (Math.abs(i / 5 - .5) + .15);
+    line(g, [px, top], [px, y + h], 0x4d3339, 2);
+    line(g, [px + 3, top + 9], [px + 3, y + h - 6], 0xa57354, 1, .62);
+  }
+  if (visiting) {
+    polygon(g, [[x + w * .58, y + h * .11], [x + w * .91, y + h * .22],
+      [x + w * .94, y + h - 5], [x + w * .58, y + h - 5]], 0x69505c);
+    polygon(g, [[x + w * .66, y + h * .18], [x + w * .90, y + h * .25],
+      [x + w * .91, y + h - 5], [x + w * .66, y + h - 5]], 0xc6855d);
+    polygon(g, [[x + w * .64, y + h - 5], [x + w * .91, y + h - 5],
+      [x + w * 1.35, y + h * 1.27], [x + w * .46, y + h * 1.27]], 0xe3ae75, .14);
+  }
+  line(g, [x + 5, y + h * .74], [x + w - 5, y + h * .74], 0x4a313a, 7);
+  g.roundRect(x - 7, y + h - 4, w + 14, 12, 2).fill(0x9d6d52);
+  g.circle(x + w * .84, y + h * .66, Math.min(9, w * .12)).fill(0x442e36)
+    .circle(x + w * .84, y + h * .66, Math.min(5, w * .07)).fill(brass);
+  const cx = dial.x + dial.w / 2, cy = dial.y + dial.h / 2, radius = dial.w * .39;
+  g.circle(cx, cy, radius + 4).fill(ink).circle(cx, cy, radius).fill(brass)
+    .circle(cx, cy, radius - 4).fill(0x432938);
+  const idx = TOWNS.findIndex(t => t.id === town);
+  TOWNS.forEach((destination, i) => {
+    const angle = (-90 + i * 120) * Math.PI / 180;
+    g.circle(cx + Math.cos(angle) * radius * .66, cy + Math.sin(angle) * radius * .66, radius * .12)
+      .fill(idx === i ? Number.parseInt(destination.color.slice(1), 16) : 0x9d7867);
+  });
+  const angle = (idx < 0 ? 90 : -90 + idx * 120) * Math.PI / 180;
+  line(g, [cx, cy], [cx + Math.cos(angle) * radius * .57, cy + Math.sin(angle) * radius * .57], warm, 3);
+  g.circle(cx, cy, 3.7).fill(warm);
+}
+
+export function drawVista(exterior: Graphics, { x, y, w, h }: Bounds, town: string | null) {
   exterior.rect(x, y, w, h).fill(town === 'harbor' ? 0x427a9d : town === 'forge' ? 0x8d555b : town === 'meadow' ? 0x668e91 : 0x303758);
-  exterior.circle(x + w * .67, y + h * .30, w * .135).fill(town === 'harbor' ? 0xffca9d : 0xffd49b);
+  exterior.circle(x + w * .67, y + h * .30, Math.min(h * .135, w * .12)).fill(town === 'harbor' ? 0xffca9d : 0xffd49b);
   if (town === 'harbor') {
     exterior.rect(x, y + h * .62, w, h * .38).fill(0x386078);
     for (let i = 0; i < 5; i++) {
       const waveY = y + h * (.64 + i * .069);
       line(exterior, [x + w * (i % 2 ? .13 : .36), waveY], [x + w * .92, waveY], 0xabc3ba, 2, .5);
     }
-    polygon(exterior, [[x + w * .26, y + h * .76], [x + w * .29, y + h * .44],
-      [x + w * .53, y + h * .76]], 0xe9cbab);
-    polygon(exterior, [[x + w * .19, y + h * .77], [x + w * .60, y + h * .77],
-      [x + w * .50, y + h * .83], [x + w * .25, y + h * .83]], 0x4d3744);
+    for (const [px, py, size] of [[.25, .83, 1], [.66, .70, .6]]) {
+      polygon(exterior, [[x + w * px, y + h * py], [x + w * (px + .02), y + h * (py - .37 * size)],
+        [x + w * (px + .13 * size), y + h * py]], 0xe9cbab);
+      polygon(exterior, [[x + w * (px - .02), y + h * py], [x + w * (px + .17 * size), y + h * py],
+        [x + w * (px + .13 * size), y + h * (py + .07 * size)], [x + w * px, y + h * (py + .07 * size)]], 0x4d3744);
+    }
   } else if (town) {
     polygon(exterior, [[x, y + h * .62], [x + w * .22, y + h * .43], [x + w * .43, y + h * .62],
       [x + w * .74, y + h * .51], [x + w, y + h * .65], [x + w, y + h], [x, y + h]],
@@ -143,7 +183,11 @@ function drawPortal(layer: Container, g: Graphics, door: Bounds, dial: Bounds, t
       exterior.rect(px, py, w * .123, h * .085).fill(town === 'forge' ? 0x4e3844 : 0x75534d);
       polygon(exterior, [[px - w * .023, py], [px + w * .063, py - h * .052], [px + w * .15, py]], 0x55353d);
       exterior.rect(px + w * .044, py + h * .025, w * .034, h * .039).fill(0xffc888);
-      if (town === 'forge') exterior.rect(px + w * .087, py - h * .08, w * .028, h * .085).fill(0x4e3844);
+      if (town === 'forge') {
+        exterior.rect(px + w * .087, py - h * .16, w * .028, h * .17).fill(0x4e3844);
+        for (let j = 0; j < 4; j++) exterior.ellipse(px + w * (.10 + j * .014), py - h * (.17 + j * .044),
+          w * (.018 + j * .010), h * (.025 + j * .017)).fill({ color: 0x5a4657, alpha: .45 });
+      }
     }
   } else {
     const random = seeded(91);
@@ -152,23 +196,33 @@ function drawPortal(layer: Container, g: Graphics, door: Bounds, dial: Bounds, t
       exterior.circle(px, py, .65 + random() * 1.8).fill({ color: 0xe6d8b2, alpha: .28 + random() * .5 });
     }
   }
-  if (!open && town) {
-    line(exterior, [x + w * .5, y], [x + w * .5, y + h], 0x593947, 3);
-    line(exterior, [x, y + h * .54], [x + w, y + h * .54], 0x593947, 3);
+}
+
+function drawBay(layer: Container, g: Graphics, bay: Bounds, town: string | null) {
+  const { x, y, w, h } = bay;
+  const outline: Point[] = [[x, y + h * .14], [x + w * .2, y], [x + w * .8, y],
+    [x + w, y + h * .14], [x + w, y + h * .90], [x + w * .8, y + h],
+    [x + w * .2, y + h], [x, y + h * .90]];
+  const exterior = new Graphics();
+  const mask = new Graphics().poly(outline.flat()).fill(0xffffff);
+  exterior.mask = mask;
+  layer.addChild(exterior, mask);
+  drawVista(exterior, bay, town);
+  polygon(exterior, [outline[0], outline[1], outline[6], outline[7]], 0x223541, .21);
+  polygon(exterior, [outline[2], outline[3], outline[4], outline[5]], 0x223541, .21);
+  for (const f of [.20, .50, .80]) {
+    line(g, [x + w * f, y], [x + w * f, y + h], 0x624248, f === .5 ? 4 : 7);
+    line(g, [x + w * f + 2, y], [x + w * f + 2, y + h], 0xc28c62, 1, .8);
   }
-  g.roundRect(x - 13, y + h - 5, w + 26, 12, 2).fill(0x805646);
-  const cx = dial.x + dial.w / 2, cy = dial.y + dial.h / 2, radius = dial.w * .39;
-  g.circle(cx, cy, radius + 4).fill(ink).circle(cx, cy, radius).fill(brass)
-    .circle(cx, cy, radius - 4).fill(0x432938);
-  const idx = TOWNS.findIndex(t => t.id === town);
-  for (let i = 0; i < 3; i++) {
-    const angle = (-90 + i * 120) * Math.PI / 180;
-    g.circle(cx + Math.cos(angle) * radius * .62, cy + Math.sin(angle) * radius * .62, radius * .11)
-      .fill(i === idx ? 0xffefb4 : 0x9d7867);
-  }
-  const angle = (idx < 0 ? 90 : -90 + idx * 120) * Math.PI / 180 + time;
-  line(g, [cx, cy], [cx + Math.cos(angle) * radius * .52, cy + Math.sin(angle) * radius * .52], warm, 3);
-  g.circle(cx, cy, 3.7).fill(warm);
+  line(g, [x, y + h * .49], [x + w * .20, y + h * .43], 0x624248, 5);
+  line(g, [x + w * .20, y + h * .43], [x + w * .80, y + h * .43], 0x624248, 5);
+  line(g, [x + w * .80, y + h * .43], [x + w, y + h * .49], 0x624248, 5);
+  g.poly(outline.flat()).stroke({ color: ink, width: 14 });
+  g.poly(outline.flat()).stroke({ color: 0x9b6b52, width: 8 });
+  g.poly(outline.flat()).stroke({ color: brass, width: 1.5 });
+  polygon(g, [[x - 5, y + h * .89], [x + w * .2, y + h - 2], [x + w * .8, y + h - 2],
+    [x + w + 5, y + h * .89], [x + w + 7, y + h * .94], [x + w * .81, y + h + 10],
+    [x + w * .19, y + h + 10], [x - 7, y + h * .94]], 0xb58159);
 }
 
 const goodsColors = Object.fromEntries(GOODS.map(good => [good.id, good.color])) as Record<GoodId, number>;
@@ -193,18 +247,23 @@ function drawGood(g: Graphics, id: GoodId, x: number, y: number, s: number) {
   }
 }
 
-function drawShelf(g: Graphics, b: Bounds, shelf: State['shelves'][number], stock: number, selected: boolean) {
+function drawShelf(g: Graphics, b: Bounds, shelf: State['shelves'][number] | undefined, stock: number, selected: boolean, window: boolean) {
   const { x, y, w, h } = b;
-  g.roundRect(x + 2, y, w - 4, h, 5).fill(0x2a2130)
-    .roundRect(x + 3, y + 4, w - 6, h - 6, 3).fill(0x4b3441);
-  line(g, [x + 3, y + 4], [x + w - 5, y + 4], 0x946359, 3, .85);
-  const s = Math.min(h * .54, w * .14, 37);
-  if (shelf.goodId) for (let i = 0; i < Math.min(stock, 5); i++) {
-    drawGood(g, shelf.goodId, x + w * (.13 + .155 * i), y + h - 10, s);
+  const platform = y + h * (window ? .80 : .57);
+  if (!window) {
+    g.ellipse(x + w / 2, y + h + 8, w * .51, h * .22).fill({ color: ink, alpha: .40 });
+    g.roundRect(x + w * .11, platform - 4, w * .78, h * .49, 4).fill(0x50323d);
+    g.rect(x + w * .17, platform + 5, w * .66, h * .31).fill(0x65413e);
+    for (const f of [.21, .79]) line(g, [x + w * f, platform + 7], [x + w * f, y + h + 7], 0x382631, 5);
   }
-  polygon(g, [[x, y + h - 9], [x + w, y + h - 9], [x + w - 5, y + h + 5], [x + 5, y + h + 5]], 0xa57054);
-  g.rect(x + 7, y + h - 4, w - 14, 4).fill(selected ? 0xffce80 : 0x624139);
-  if (selected) g.roundRect(x, y, w, h + 4, 4).stroke({ color: warm, width: 2 });
+  polygon(g, [[x + w * .075, platform - 11], [x + w * .925, platform - 11],
+    [x + w, platform + 4], [x, platform + 4]], window ? 0xc38d60 : 0xa57054);
+  g.roundRect(x, platform + 3, w, 7, 2).fill(selected ? warm : 0x70493f);
+  line(g, [x + 4, platform + 3], [x + w - 4, platform + 3], 0xd5a377, 1, .8);
+  const s = Math.min(h * .53, w * .15, 42);
+  if (shelf?.goodId) for (let i = 0; i < Math.min(stock, 5); i++) {
+    drawGood(g, shelf.goodId, x + w * (.18 + .16 * i), platform - 4, s);
+  }
 }
 
 function drawCustomer(g: Graphics, b: Bounds, seed: number, index: number) {
@@ -221,44 +280,58 @@ function drawCustomer(g: Graphics, b: Bounds, seed: number, index: number) {
   line(g, [x + w * .36, y + h * .48], [x + w * .63, y + h * .57], 0xe0aa74, 4);
 }
 
-function drawCounter(g: Graphics, c: Bounds, crate: Bounds, bell: Bounds, ledger: Bounds) {
+function drawCounter(g: Graphics, c: Bounds, bell: Bounds) {
   g.roundRect(c.x + 7, c.y + 11, c.w - 14, c.h + 4, 10).fill(0x372630);
   g.roundRect(c.x, c.y, c.w, c.h, 9).fill(0x815145)
     .roundRect(c.x + 8, c.y + 26, c.w - 16, Math.max(4, c.h - 33), 4).fill(0x57363c);
   for (let i = 1; i < 6; i++) line(g, [c.x + c.w * i / 6, c.y + 22], [c.x + c.w * i / 6, c.y + c.h - 4], 0x422b37, 2);
   g.roundRect(c.x - 7, c.y, c.w + 14, 23, 5).fill(0xa16c52).roundRect(c.x - 5, c.y + 1, c.w + 10, 4, 2).fill(0xca9667);
-  g.roundRect(crate.x, crate.y + 9, crate.w, crate.h - 10, 5).fill(0x68473e)
-    .rect(crate.x + 5, crate.y + 16, crate.w - 10, crate.h - 23).fill(0x9e6b51)
-    .rect(crate.x + 8, crate.y + 24, crate.w - 16, 4).fill(0x674437)
-    .rect(crate.x + 8, crate.y + 37, crate.w - 16, 4).fill(0x674437);
-  line(g, [crate.x + 9, crate.y + 41], [crate.x + crate.w - 7, crate.y + 17], 0xbc8c61, 5);
   const bx = bell.x + bell.w / 2, by = bell.y + 34;
   g.ellipse(bx, by + 5, 21, 6).fill(0x603c36)
     .ellipse(bx, by + 2, 19, 5).fill(brass)
     .roundRect(bx - 13, by - 16, 26, 17, 9).fill(0xd9a557)
     .ellipse(bx - 4, by - 10, 4, 7).fill(0xffd993)
     .circle(bx, by - 18, 3).fill(0xffda97);
-  polygon(g, [[ledger.x, ledger.y + 16], [ledger.x + ledger.w * .79, ledger.y + 9],
-    [ledger.x + ledger.w, ledger.y + 32], [ledger.x + ledger.w * .19, ledger.y + 40]], 0x542b44);
-  polygon(g, [[ledger.x + 3, ledger.y + 16], [ledger.x + ledger.w * .78, ledger.y + 11],
-    [ledger.x + ledger.w * .96, ledger.y + 29], [ledger.x + ledger.w * .20, ledger.y + 36]], 0xbb986f);
-  line(g, [ledger.x + ledger.w * .41, ledger.y + 14], [ledger.x + ledger.w * .59, ledger.y + 34], 0x72564f, 2);
+}
+
+function drawDeskBook(g: Graphics, b: Bounds, phase: State['phase'], open: boolean) {
+  const theme = phaseBooks[phase];
+  const { x, y, w, h } = b;
+  g.ellipse(x + w * .51, y + h * .87, w * .51, h * .20).fill({ color: ink, alpha: .62 });
+  if (open) {
+    polygon(g, [[x + 6, y + h * .30], [x + w * .50, y + h * .39], [x + w - 6, y + h * .30],
+      [x + w, y + h * .86], [x + w * .51, y + h * .94], [x, y + h * .87]], theme.cover);
+    polygon(g, [[x + 9, y + h * .27], [x + w * .50, y + h * .37], [x + w - 9, y + h * .27],
+      [x + w - 5, y + h * .77], [x + w * .50, y + h * .87], [x + 5, y + h * .77]], theme.page);
+    line(g, [x + w * .50, y + h * .37], [x + w * .50, y + h * .87], 0xab8170, 2);
+    return;
+  }
+  polygon(g, [[x + 5, y + h * .30], [x + w * .86, y + h * .14], [x + w, y + h * .73],
+    [x + w, y + h * .84], [x + w * .14, y + h * .99], [x, y + h * .42]], theme.page);
+  polygon(g, [[x + 3, y + h * .25], [x + w * .86, y + h * .10], [x + w, y + h * .72],
+    [x + w * .14, y + h * .88]], theme.cover);
+  g.poly([x + 11, y + h * .31, x + w * .82, y + h * .17, x + w - 11, y + h * .67,
+    x + w * .18, y + h * .79]).stroke({ color: theme.edge, width: 1.5 });
+  line(g, [x + 1, y + h * .28], [x + w * .14, y + h * .95], theme.edge, 4);
 }
 
 export function drawRoom(layer: Container, width: number, height: number, state: State, options: ArtOptions = {}) {
   const layout = roomLayout(width, height);
-  const { door, dial, shelves, crate, bell, ledger, counter, visitor, horizon } = layout;
+  const { door, dial, bay, shelves, bell, book, counter, visitor, horizon } = layout;
   const background = new Graphics();
   drawRoomBackground(background, width, height, horizon);
   layer.addChild(background);
   const furniture = new Graphics();
-  drawPortal(layer, furniture, door, dial, options.townId ?? state.townId, state.phase === 'open', options.time ?? 0);
+  drawDoor(furniture, door, dial, options.townId ?? state.townId, state.phase === 'open');
+  drawBay(layer, furniture, bay, options.townId ?? state.townId);
   layer.addChild(furniture);
   shelves.forEach((b, i) => {
     const shelf = state.shelves[i];
-    drawShelf(furniture, b, shelf, shelf.goodId ? quantity(state, shelf.goodId) : 0, options.selectedShelf === i);
+    drawShelf(furniture, b, shelf, shelf?.goodId ? quantity(state, shelf.goodId) : 0, options.selectedShelf === i, i === 3);
   });
   if (state.phase === 'open' && state.customers[state.served]) drawCustomer(furniture, visitor, state.seed, state.served);
-  drawCounter(furniture, counter, crate, bell, ledger);
+  if (state.phase === 'report') furniture.rect(0, 0, width, horizon).fill({ color: 0x292041, alpha: .15 });
+  drawCounter(furniture, counter, bell);
+  drawDeskBook(furniture, book, state.phase, options.bookOpen ?? false);
   return layout;
 }

@@ -16,4 +16,8 @@ Each campaign has a server-authoritative snapshot, rules version, and revision. 
 
 Random customer behavior derives from the campaign seed, town, and day. The browser renders the response and requests the next action. A reload resumes the saved phase, inventory, and day without relying on browser storage.
 
+The [shop day design](game-design/README.md) describes planned player-facing behavior. The [shop room and books specification](game-design/shop-room-and-books.md) covers the shared Pixi presentation and controls.
+
+The shop loop keeps campaign snapshots on `rulesVersion` 1. Destination, Buying, Business, and Closing map to the existing stored phase values `travel`, `prepare`, `open`, and `report`, respectively. Extend the snapshot with optional game-loop fields and apply defaults when reading older saves. Keep the existing field shapes and meanings so the previous release can still read a campaign written by this release.
+
 The API serves `/api/v1/health/live`, `/api/v1/health/ready`, and `/api/v1/health/version`. The version response identifies the deployed commit and preview pull request. The [deployment runbook](operations/deployment.md) covers image provenance, host operation, and recovery.

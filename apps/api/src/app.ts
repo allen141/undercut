@@ -5,7 +5,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { z, ZodError } from 'zod';
 import { campaignInputSchema, commandRequestSchema } from '@undercut/contracts';
-import { applyCommand, newGame, RuleError } from '@undercut/game-core';
+import { applyCommand, newGame, RuleError, upgradeState } from '@undercut/game-core';
 import { auth, origin, redeemInvitation } from './auth.js';
 import { db } from './db.js';
 import { campaigns, receipts } from './schema.js';
@@ -124,7 +124,7 @@ export function buildApp() {
     const [campaign] = await db.select().from(campaigns)
       .where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)));
     if (!campaign) throw new HttpError(404, 'Campaign not found.');
-    return campaign;
+    return { ...campaign, state: upgradeState(campaign.state) };
   });
 
   app.post('/api/v1/campaigns/:id/commands', async (request) => {

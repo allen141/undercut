@@ -4,9 +4,9 @@ Undercut is a browser-based trading game about growing a traveling shop. The lon
 
 ## First milestone
 
-A player signs in by invitation and can start or resume multiple named campaigns. Each begins on day one with 100 gold, empty inventory, and three fixed shelves. Campaigns have independent progress and economies.
+A player signs in by invitation and can start or resume multiple named campaigns. Each begins on day one with 100 gold, empty inventory, one window display, and three floor displays. Campaigns have independent progress and economies.
 
-Each day follows the shop loop.
+The existing game follows this shop loop.
 
 1. Choose one of three towns. Compare wholesale availability and prices, local demand, and expected customer budgets for six goods.
 2. Buy inventory, select the goods to display, and set the price for each shelf.
@@ -16,6 +16,8 @@ Each day follows the shop loop.
 The shop works on desktop and portrait mobile. The active shop fills the viewport with a PixiJS WebGL canvas. The door dial, market, shelves, counter, and ledger carry the day’s actions. Keyboard and assistive technology can reach the canvas controls through semantic controls. Account forms and campaign selection use native browser controls.
 
 Public registration, multiplayer, offline writes, world simulation, branching story events, and cross-campaign rewards are outside this milestone.
+
+The [shop day design](game-design/README.md) specifies the next iteration of the shop loop, including vendor visits, display setup, automated customer service, and the closing review. It also defines the shared shop room and phase books.
 
 ## Completion
 

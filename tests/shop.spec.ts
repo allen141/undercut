@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import { expect, test as base, type Page } from '@playwright/test';
 import { Pool } from 'pg';
 import type { CommandRequest } from '@undercut/contracts';
-import { quantity, type State } from '@undercut/game-core';
+import { WINDOW_SLOT_INDEX, applyCommand, newGame, quantity, type State } from '@undercut/game-core';
 
 const run = promisify(execFile);
 const password = 'browser-test-credential-41';
@@ -86,7 +86,7 @@ async function campaignSnapshot(page: Page) {
   if (!current) throw new Error(`Could not find active campaign ${name}`);
   const response = await page.request.get(`/api/v1/campaigns/${current.id}`);
   expect(response.ok()).toBeTruthy();
-  return await response.json() as { state: State };
+  return await response.json() as { id: string; revision: number; state: State };
 }
 
 async function expectRevision(page: Page, revision: number) {
@@ -112,40 +112,91 @@ async function chooseTown(page: Page, name: string, keyboard = false) {
   await activate(page, 'Choose ' + name);
 }
 
+async function visit(page: Page, vendor: string) {
+  if (!(await action(page, 'Visit ' + vendor).count())) await activate(page, 'Open wholesale book');
+  await activate(page, 'Visit ' + vendor);
+}
+
 async function buy(page: Page, good: string, quantity = 1) {
-  if (!(await action(page, 'Select ' + good).count())) await activate(page, 'Wholesaler');
+  if (!(await action(page, 'Select ' + good).count())) await activate(page, 'Open wholesale book');
   await activate(page, 'Select ' + good);
   for (let i = 1; i < quantity; i++) await activate(page, 'Increase quantity');
   await activate(page, 'Buy ' + good);
 }
 
-async function setShelf(page: Page, slot: number, good: string, price: number, revision: number) {
+async function setDisplay(page: Page, slot: number, good: string, price: number, revision: number) {
   if (await action(page, 'Close panel').count()) await activate(page, 'Close panel');
-  await activate(page, `Shelf ${slot}`);
+  const display = slot === WINDOW_SLOT_INDEX ? 'Window display' : `Floor display ${slot + 1}`;
+  await activate(page, display);
   await activate(page, `Display ${good[0].toUpperCase()}${good.slice(1)}`);
   await activate(page, 'Price per item');
   await activate(page, 'Clear price');
   for (const digit of String(price)) await activate(page, 'Digit ' + digit);
   await activate(page, 'Done');
-  await activate(page, `Save shelf ${slot}`);
+  await activate(page, `Save ${display.toLowerCase()}`);
   await expectRevision(page, revision);
+  expect((await campaignSnapshot(page)).state.shelves[slot]).toEqual({ goodId: good.toLowerCase(), price });
 }
 
-async function serveAndClose(page: Page, openingRevision: number) {
-  await activate(page, 'Open the shop');
-  await expectRevision(page, openingRevision);
-  for (let i = 1; i <= 8; i++) {
-    await activate(page, 'Serve customer');
-    await expectRevision(page, openingRevision + i);
+async function seedGrainNegotiation(page: Page, name: string) {
+  const { id } = await campaignSnapshot(page);
+  let seed: number;
+  for (seed = 1; seed < 1000; seed++) {
+    let state = applyCommand(newGame(seed), { type: 'chooseTown', townId: 'meadow' });
+    state = applyCommand(state, { type: 'visitVendor', vendorId: 'meadow-bargain' });
+    const offer = state.vendorOffers['meadow-bargain'].find(row => row.goodId === 'grain' && row.kind === 'regular')!;
+    state = applyCommand(state, { type: 'buy', offerId: offer.id, quantity: 3 });
+    state = applyCommand(state, { type: 'finishBuying' });
+    state = applyCommand(state, { type: 'shelf', slot: WINDOW_SLOT_INDEX, goodId: 'grain', price: 5 });
+    state = applyCommand(state, { type: 'open' });
+    if (applyCommand(state, { type: 'serve' }).pendingNegotiation) break;
   }
-  await activate(page, 'Close & review day');
-  await expectRevision(page, openingRevision + 9);
-  const { state } = await campaignSnapshot(page);
+  expect(seed).toBeLessThan(1000);
+  const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  try {
+    await pool.query("UPDATE campaigns SET state = jsonb_set(state, '{seed}', to_jsonb($1::int)) WHERE id = $2", [seed, id]);
+  } finally {
+    await pool.end();
+  }
+  await page.reload();
+  await page.getByRole('button', { name: new RegExp(name) }).click();
+  await expectRevision(page, 0);
+}
+
+async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?: string) {
+  const report = page.locator('[data-canvas-report]');
+  const accept = action(page, 'Accept offer');
+  await activate(page, 'Open the shop');
+  await expect(action(page, 'Serve customer')).toHaveCount(0);
+  let negotiations = 0;
+  for (;;) {
+    await expect.poll(async () => await report.count() === 1 || await accept.count() === 1 && await accept.isEnabled()).toBe(true);
+    if (await report.count()) break;
+    negotiations++;
+    expect(negotiations).toBeLessThanOrEqual(2);
+    if (reloadAtOffer && negotiations === 1) {
+      const saved = await campaignSnapshot(page);
+      expect(saved.state.pendingNegotiation).not.toBeNull();
+      await page.reload();
+      await page.getByRole('button', { name: new RegExp(reloadAtOffer) }).click();
+      await expectRevision(page, saved.revision);
+      await expect(accept).toBeEnabled();
+      expect((await campaignSnapshot(page)).state.pendingNegotiation).toEqual(saved.state.pendingNegotiation);
+    }
+    await activate(page, 'Accept offer');
+  }
+  if (reloadAtOffer) expect(negotiations).toBeGreaterThan(0);
+  const { state, revision } = await campaignSnapshot(page);
+  expect(revision).toBe(openingRevision + 1 + negotiations);
+  await expectRevision(page, revision);
   expect(state.phase).toBe('report');
   expect(state.log).toHaveLength(8);
+  expect(state.negotiations).toHaveLength(negotiations);
   await expect(page.locator('[data-canvas-ledger] li')).toHaveCount(8);
-  await expect(page.locator('[data-canvas-report]')).toContainText(`${state.history.at(-1)?.profit}g`);
+  await expect(report).toContainText(`${state.history.at(-1)?.profit}g`);
   expect(state.history.at(-1)?.profit).toBe(state.revenue - state.costOfSales);
+  await activate(page, 'Day’s takings');
+  return revision;
 }
 
 async function screenshot(page: Page, path: string) {
@@ -181,23 +232,28 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   const errors = captureErrors(page);
   await invite(page, account);
   await createCampaign(page, 'Saffron Counter');
+  await seedGrainNegotiation(page, 'Saffron Counter');
   await screenshot(page, info.outputPath('01-travel.png'));
   await chooseTown(page, 'Meadow');
   await expectRevision(page, 1);
-  await buy(page, 'Grain', 3);
+  await visit(page, 'Mill Yard');
   await expectRevision(page, 2);
+  await buy(page, 'Grain', 3);
+  await expectRevision(page, 3);
   await expectStock(page, 'grain', 3);
-  await setShelf(page, 1, 'grain', 5, 3);
+  await activate(page, 'Finish buying');
+  await expectRevision(page, 4);
+  await setDisplay(page, WINDOW_SLOT_INDEX, 'grain', 5, 5);
   await screenshot(page, info.outputPath('02-preparation.png'));
-  await serveAndClose(page, 4);
+  const closingRevision = await serveAndClose(page, 6, 'Saffron Counter');
   await screenshot(page, info.outputPath('03-report.png'));
   await page.reload();
   await page.getByRole('button', { name: /Saffron Counter/ }).click();
-  await expectRevision(page, 13);
+  await expectRevision(page, closingRevision);
   expect((await campaignSnapshot(page)).state.log).toHaveLength(8);
   await activate(page, 'Day’s takings');
   await activate(page, 'Begin day 2');
-  await expectRevision(page, 14);
+  await expectRevision(page, closingRevision + 1);
   if (info.project.name === 'mobile-chromium') {
     const dial = action(page, 'Turn the door dial');
     const portraitDial = await dial.boundingBox();
@@ -206,9 +262,11 @@ test('trades a full day and returns with its ledger and remaining stock', async 
     // Pixi rebuilds the room through ResizeObserver after the browser viewport changes.
     await expect.poll(() => dial.boundingBox()).not.toEqual(portraitDial);
     await chooseTown(page, 'Harbor');
-    await expectRevision(page, 15);
+    await expectRevision(page, closingRevision + 2);
+    await visit(page, 'Dockside Lots');
+    await expectRevision(page, closingRevision + 3);
     await buy(page, 'Tea');
-    await expectRevision(page, 16);
+    await expectRevision(page, closingRevision + 4);
     await screenshot(page, info.outputPath('04-landscape.png'));
   }
   await expectNoOverflow(page);
@@ -250,11 +308,16 @@ test('fits and accepts touch within a zoomed Android viewport', async ({ page, a
   expect(zoomed.backingRatio).toBeCloseTo(2, 1);
   await chooseTown(page, 'Meadow');
   await expectRevision(page, 1);
-  await buy(page, 'Grain');
+  await visit(page, 'Mill Yard');
   await expectRevision(page, 2);
+  await buy(page, 'Grain');
+  await expectRevision(page, 3);
   await expectStock(page, 'grain', 1);
+  await activate(page, 'Finish buying');
+  await expectRevision(page, 4);
   await activate(page, 'Close panel');
-  for (const name of ['All campaigns', 'Inventory and gold', 'Wholesaler', 'Open the shop']) {
+  for (const name of ['All campaigns', 'Inventory and gold', 'Open wholesale book', 'Open the shop',
+    'Window display', 'Floor display 1', 'Floor display 2', 'Floor display 3']) {
     const target = action(page, name);
     await expect(target).toHaveCount(1);
     expect(await target.evaluate((element) => {
@@ -284,6 +347,8 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
   await screenshot(page, info.outputPath('01-travel.png'));
   await chooseTown(page, 'Meadow', true);
   await expectRevision(page, 1);
+  await visit(page, 'Mill Yard');
+  await expectRevision(page, 2);
 
   const requests: CommandRequest[] = [];
   await page.route('**/commands', async route => {
@@ -309,7 +374,7 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
   await page.getByRole('button', { name: /Lantern & Co\./ }).click();
   await expectStock(page, 'grain', 3);
   await activate(page, 'Confirm last action');
-  await expectRevision(page, 2);
+  await expectRevision(page, 3);
   await expectStock(page, 'grain', 3);
   expect(requests).toHaveLength(2);
   expect(requests[0]).toEqual(requests[1]);
@@ -321,35 +386,51 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
     await secondPage.goto('/');
     await signIn(secondPage, account.email);
     await secondPage.getByRole('button', { name: /Lantern & Co\./ }).click();
-    await expectRevision(secondPage, 2);
-    await buy(page, 'Herbs');
-    await expectRevision(page, 3);
-    await buy(secondPage, 'Tea');
-    await expect(secondPage.getByRole('alert')).toContainText('changed on another device');
     await expectRevision(secondPage, 3);
+    await buy(page, 'Herbs');
+    await expectRevision(page, 4);
+    await buy(secondPage, 'Herbs');
+    await expect(secondPage.getByRole('alert')).toContainText('changed on another device');
+    await expectRevision(secondPage, 4);
     await expectStock(secondPage, 'herbs', 1);
     await expectStock(secondPage, 'tea', 0);
   } finally {
     await other.close();
   }
 
+  await activate(page, 'Leave vendor');
+  await expectRevision(page, 5);
+  await expect(action(page, 'Visit Mill Yard')).toBeDisabled();
+  await visit(page, 'Meadow Supply');
+  await expectRevision(page, 6);
   await buy(page, 'Cloth');
-  await expectRevision(page, 4);
-  await setShelf(page, 1, 'grain', 5, 5);
-  await setShelf(page, 2, 'herbs', 8, 6);
-  await setShelf(page, 3, 'cloth', 15, 7);
+  await expectRevision(page, 7);
+  await buy(page, 'Tea');
+  await expectRevision(page, 8);
+  await activate(page, 'Compare all vendors');
+  await expect(action(page, 'Visit Greenbank Growers')).toBeDisabled();
+  await activate(page, 'Finish buying');
+  await expectRevision(page, 9);
+  await setDisplay(page, WINDOW_SLOT_INDEX, 'grain', 5, 10);
+  await setDisplay(page, 0, 'herbs', 8, 11);
+  await setDisplay(page, 1, 'cloth', 15, 12);
+  await setDisplay(page, 2, 'tea', 20, 13);
   await screenshot(page, info.outputPath('02-preparation.png'));
-  await serveAndClose(page, 8);
+  const meadowClosing = await serveAndClose(page, 14);
   await screenshot(page, info.outputPath('03-meadow-report.png'));
 
   await activate(page, 'Begin day 2');
-  await expectRevision(page, 18);
+  await expectRevision(page, meadowClosing + 1);
   await chooseTown(page, 'Harbor');
-  await expectRevision(page, 19);
+  await expectRevision(page, meadowClosing + 2);
+  await visit(page, 'Dockside Lots');
+  await expectRevision(page, meadowClosing + 3);
   await buy(page, 'Tea', 2);
-  await expectRevision(page, 20);
-  await setShelf(page, 1, 'tea', 12, 21);
-  await serveAndClose(page, 22);
+  await expectRevision(page, meadowClosing + 4);
+  await activate(page, 'Finish buying');
+  await expectRevision(page, meadowClosing + 5);
+  await setDisplay(page, 2, 'tea', 12, meadowClosing + 6);
+  const harborClosing = await serveAndClose(page, meadowClosing + 7);
   await screenshot(page, info.outputPath('04-harbor-report.png'));
 
   if (await action(page, 'Close panel').count()) await activate(page, 'Close panel');
@@ -363,7 +444,7 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
   await signIn(page, account.email);
   await expect(page.getByRole('button', { name: /Second Ledger/ })).toBeVisible();
   await page.getByRole('button', { name: /Lantern & Co\./ }).click();
-  await expectRevision(page, 31);
+  await expectRevision(page, harborClosing);
   expect((await campaignSnapshot(page)).state.phase).toBe('report');
   expect((await campaignSnapshot(page)).state.log).toHaveLength(8);
 

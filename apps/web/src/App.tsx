@@ -278,7 +278,7 @@ export function App() {
             {newCampaign ? <p role="status">Confirm creation of <strong>{newCampaign.name}</strong> with the server.</p> :
               <label>Shop name<input name="name" placeholder="The little shop" required maxLength={60} /></label>}
             <button className="primary" disabled={busy || !online}>{newCampaign ? 'Confirm campaign' : 'Create campaign'}</button>
-            <p className="muted small">100 gold. Three shelves. Your choice of town.</p>
+          <p className="muted small">100 gold. Four displays. Your choice of town.</p>
           </form>
         </div>
       </section>}
