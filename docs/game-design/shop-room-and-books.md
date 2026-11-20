@@ -2,7 +2,7 @@
 
 ## Persistent room
 
-The active campaign uses the full viewport for a single Pixi scene. The back wall has a display window and a separate arched door. One panorama forms the town view through both openings. The door opens clear of the street view during business and closes during destination selection, buying, and closing. Three floor displays and the window sill show the current stock. The counter, bell, and ledger sit in the foreground, with the customer behind the counter during a visit.
+The active campaign uses the full viewport for a single Pixi scene. The back wall dominates the room, with a wide display window beside the separate arched door. One panorama forms the town view through both openings. The door opens clear of the street view during business and closes during destination selection, buying, and closing. Three floor displays and the window sill show the current stock. The counter, bell, and ledger sit in the foreground, with the customer behind the counter during a visit.
 
 The scene builds depth through its draw order. The illustrated timber wall and floor share a horizon with the doorway and shelves. The scenery layer clips the selected town painting to both openings in one coordinate space. The frames, lantern, and display goods sit in front of the painting. Customers enter and leave through the doorway. The counter and props render above the visitor, followed by sale effects, book pages, and controls. Portrait uses compact floor displays below the wall openings. Wide layouts set the displays on either side and set the counter farther forward.
 

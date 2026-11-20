@@ -695,12 +695,13 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         ['Good', 'Price trend', 'Demand', 'Budget', 'Held'].forEach((label, i) =>
           text(overlay, label, left + columns[i], y + 100,
             { align: i === 0 ? 'left' : i === 4 ? 'right' : 'center', color: paperMuted, size: 11 }));
+        const rowHeight = layout.portrait ? 32 : 34;
         GOODS.forEach((good, i) => {
           const prices = (offers: typeof allOffers) => offers.filter(offer => offer.goodId === good.id).map(offer => offer.unitCost);
           const localPrices = markets[selectedTown].map(offers => average(prices(offers)));
           const benchmark = average(prices(allOffers));
           const current = localPrices.at(-1) ?? null;
-          const rowY = 127 + i * 34;
+          const rowY = 127 + i * rowHeight;
           const plot = rect(left + inner * .205, y + rowY - 9, inner * .205, 18);
           const samples = [...localPrices, benchmark].filter(price => price !== null);
           const min = Math.min(...samples) - .5;
@@ -738,11 +739,12 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
           readingLines.push(`${good.name}. ${history}. Global average ${benchmark === null ? 'unavailable' : quotedPrice(benchmark)}. ` +
             `Demand ${demand.toLowerCase()}, budget ${budget}, held ${held}.`);
         });
-        rule(319);
+        const legendY = 131 + GOODS.length * rowHeight;
+        rule(legendY - 16);
         const period = days.length === 1 ? `Day ${days[0]}` : `Days ${days[0]}–${days.at(-1)}`;
-        note(`${period} · Solid town avg · Dashed global avg`, 335);
-        note('— No local regular price', 353);
-        note('Pick a town on the dial. Press its center to travel.', 376);
+        note(`${period} · Solid town avg · Dashed global avg`, legendY);
+        note('— No local regular price', legendY + 18);
+        note('Pick a town on the dial. Press its center to travel.', legendY + 41);
       }
 
       if (panel === 'book' && phase === 'prepare' && !state.buyingComplete) {

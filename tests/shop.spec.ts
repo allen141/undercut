@@ -125,7 +125,7 @@ async function roomViewport(page: Page) {
     width: bounds.w * w * scale,
     height: bounds.h * h * scale,
   });
-  return { layout, clip };
+  return { layout, clip, width: canvas.width / scale, height: canvas.height / scale };
 }
 
 async function checkTownJournal(page: Page, name: string, issue: string, picture: string, day: number) {
@@ -340,6 +340,7 @@ test('previews towns on the dial and confirms the destination', { tag: '@smoke' 
   await expect(atlas).toContainText('Meadow · Grain & herbs');
   await activate(page, 'Close panel');
   await expect(atlas).toHaveCount(0);
+  await screenshot(page, info.outputPath('room-and-wall.png'));
   await activate(page, 'Open destination book');
   await expect(atlas.getByText(/Global average \d/)).toHaveCount(6);
   await expect(atlas).toContainText('Crystal. Day 1, unavailable.');
@@ -347,7 +348,13 @@ test('previews towns on the dial and confirms the destination', { tag: '@smoke' 
   const doorCenter = room.clip(room.layout.door, .5, 0, 0, 0).x;
   const confirm = (await action(page, 'Choose Meadow').boundingBox())!;
   expect(confirm.x + confirm.width / 2).toBeCloseTo(doorCenter, 0);
-  expect(room.layout.window.x + room.layout.window.w).toBeLessThan(room.layout.door.x);
+  const { portrait, window, door, horizon, page: reading } = room.layout;
+  expect(horizon / room.height).toBeGreaterThan(portrait ? .49 : .73);
+  expect(window.w / room.width).toBeGreaterThan(portrait ? .48 : .31);
+  expect(window.h / room.height).toBeGreaterThan(portrait ? .20 : .40);
+  expect(window.x + window.w).toBeLessThan(door.x);
+  if (portrait) expect(door.y + door.h).toBeLessThan(reading.y);
+  else expect(reading.x + reading.w).toBeLessThan(window.x);
   const clip = room.clip(room.layout.window, .18, .32, .64, .46);
   const meadowVista = await page.screenshot({ clip });
   await activate(page, 'Preview Forge');

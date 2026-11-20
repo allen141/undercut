@@ -52,7 +52,8 @@ function drawFrontWall(layer: Container, art: ShopTextures, door: Bounds, window
     .bezierCurveTo(dx(.68), dy(.21), dx(.805), dy(.31), dx(.805), dy(.47))
     .lineTo(dx(.805), doorViewBottom).closePath().fill(0xffffff);
   const vista = new Container();
-  const outside = { x: window.x, y: door.y, w: door.x + door.w - window.x, h: door.h };
+  const top = Math.min(window.y, door.y);
+  const outside = { x: window.x, y: top, w: door.x + door.w - window.x, h: door.y + door.h - top };
   if (townId === 'harbor' || townId === 'forge' || townId === 'meadow') {
     vista.addChild(fitSprite(art[`town-${townId}`], outside, 'cover', .54));
   } else {
@@ -134,13 +135,14 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
   drawFrontWall(layer, art, door, window, townId, state.phase === 'open');
   if (state.phase !== 'travel') drawDial(layer, art, dial, townId);
 
-  const lanternW = Math.min(39, Math.max(17, (door.x - window.x - window.w) * .82));
+  const lanternW = Math.min(39, (door.x - window.x - window.w) * .82);
   const lantern = { x: (window.x + window.w + door.x - lanternW) / 2, y: bay.y + 12,
     w: lanternW, h: lanternW * 1.5 };
   layer.addChild(glow(lantern.x + lantern.w / 2, lantern.y + lantern.h * .6, 64, 0xffbb62),
     fitSprite(art.lantern, lantern));
-  const plantW = Math.min(portrait ? 58 : 113, width * .15);
-  layer.addChild(fitSprite(art['plant-hanging'], { x: width * .98 - plantW, y: 57, w: plantW, h: plantW * 1.35 }));
+  const plantW = Math.min(portrait ? 48 : 113, width * .15);
+  const plantX = portrait ? width * .20 - plantW / 2 : width * .98 - plantW;
+  layer.addChild(fitSprite(art['plant-hanging'], { x: plantX, y: 57, w: plantW, h: plantW * 1.35 }));
   shelves.forEach((bounds, index) => {
     const shelf = state.shelves[index];
     const stock = shelf?.goodId ? options.stock?.(shelf.goodId) ?? quantity(state, shelf.goodId) : 0;
