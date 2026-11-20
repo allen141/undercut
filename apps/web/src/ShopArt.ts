@@ -1,33 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { GOODS, TOWNS, quantity, type GoodId, type State } from '@undercut/game-core';
-
-export type Bounds = { x: number; y: number; w: number; h: number };
-export function roomLayout(width: number, height: number) {
-  const narrow = width < 660;
-  const horizon = Math.round(height * .65);
-  const doorW = Math.min(width * .20, horizon * .66);
-  const doorH = Math.min(horizon - 88, Math.max(height * .33, doorW * 1.7));
-  const door = { x: width * .045, y: horizon - doorH, w: doorW, h: doorH };
-  const dialSize = Math.max(44, Math.min(doorW * .54, 88));
-  const dial = { x: door.x + (door.w - dialSize) / 2, y: door.y + door.h * .43, w: dialSize, h: dialSize };
-  const bayY = Math.max(82, height * .115);
-  const bay = { x: width * .34, y: bayY, w: width * .61, h: horizon - bayY - height * .105 };
-  const shelfW = Math.min(width * (narrow ? .25 : .19), height * .29);
-  const shelfH = Math.min(85, height * .12);
-  const shelves = [0, 1, 2].map(i => ({
-    x: width * (narrow ? .13 + i * .255 : .31 + i * .208), y: horizon + height * .026,
-    w: shelfW, h: shelfH,
-  }));
-  shelves.push({ x: bay.x + bay.w * .12, y: bay.y + bay.h - height * .077,
-    w: bay.w * .76, h: Math.max(44, height * .102) });
-  const counterW = Math.min(width * (narrow ? .83 : .53), height * 1.1);
-  const counter = { x: width * (narrow ? .09 : .07), y: height * .865, w: counterW, h: height * .13 };
-  const bell = { x: counter.x + counter.w * .70, y: counter.y - 32, w: 48, h: 49 };
-  const bookW = Math.max(104, Math.min(196, counterW * (narrow ? .45 : .54)));
-  const book = { x: counter.x + counter.w * .12, y: counter.y - 39, w: bookW, h: 63 };
-  const visitor = { x: width * .22, y: horizon - height * .15, w: 58, h: height * .18 };
-  return { door, dial, bay, shelves, counter, bell, book, visitor, horizon };
-}
+import { roomLayout, type Bounds } from './ShopLayout.js';
 
 const brass = 0xc99557;
 const ink = 0x211723;
@@ -157,7 +130,7 @@ function drawDoor(g: Graphics, door: Bounds, dial: Bounds, town: string | null, 
   g.circle(cx, cy, 3.7).fill(warm);
 }
 
-export function drawVista(exterior: Graphics, { x, y, w, h }: Bounds, town: string | null) {
+function drawVista(exterior: Graphics, { x, y, w, h }: Bounds, town: string | null) {
   exterior.rect(x, y, w, h).fill(town === 'harbor' ? 0x427a9d : town === 'forge' ? 0x8d555b : town === 'meadow' ? 0x668e91 : 0x303758);
   exterior.circle(x + w * .67, y + h * .30, Math.min(h * .135, w * .12)).fill(town === 'harbor' ? 0xffca9d : 0xffd49b);
   if (town === 'harbor') {

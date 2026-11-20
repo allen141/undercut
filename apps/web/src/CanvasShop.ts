@@ -6,13 +6,14 @@ import {
   inventoryValue, priceRange, quantity, reputationFor, vendorOffersForTown, vendorsInTown, type CustomerResult, type GoodId,
 } from '@undercut/game-core';
 import type { BusinessPresentation, GameProps } from './Game.js';
-import { drawCoin, drawCustomer, drawGood, drawRoom, drawVista, phaseBooks, roomLayout, type Bounds } from './ShopArt.js';
+import { drawCoin, drawCustomer, drawGood, drawRoom, phaseBooks } from './ShopArt.js';
+import { roomLayout, shopScale, type Bounds } from './ShopLayout.js';
 
 extensions.remove(AccessibilitySystem);
 
 type Rect = Bounds;
 type Action = { id: string; label: string; box: Rect; run: () => void; disabled?: boolean; active?: boolean };
-type Panel = 'book' | 'shelf' | 'price' | 'stock';
+type Panel = 'book' | 'shelf' | 'price' | 'stock' | 'journal';
 type Page = 'summary' | 'vendors' | 'activity' | 'stock';
 type Playback = { index: number; until: number; start: number; revealAfter: number; revealed: boolean; negotiated: boolean };
 export type ShopController = { update(): void; destroy(): void };
@@ -26,6 +27,8 @@ const gold = 0xf0bd73;
 const ink = 0x281f2a;
 const paperInk = 0x38262e;
 const paperMuted = 0x614941;
+const journalTheme = { cover: 0x632e44, edge: 0xc18a58, page: 0xf5dfbb };
+const journalGoods = { meadow: 'grain', forge: 'iron', harbor: 'cloth' } as const;
 const money = (n: number) => `${n}g`;
 const nameOf = (id: GoodId) => GOODS.find(item => item.id === id)!.name;
 const rect = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w, h });
@@ -65,6 +68,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   let panel: Panel | null = previous.state.pendingNegotiation ? 'book' : null;
   let page: Page = 'summary';
   let pageIndex = 0;
+  let journalArticle: number | null = null;
   let selectedTown = -1;
   let selectedShelf = 0;
   let draftGood: GoodId | null = null;
@@ -92,18 +96,21 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   let readingLayer: Container | undefined;
   let lastReadout = '';
   const semantic = new Map<string, HTMLButtonElement>();
+  let focusBounds = new Map<string, Rect>();
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const art = new Container();
   const visitArt = new Container();
   const visitor = new Graphics();
   const reward = new Graphics();
   const scene = new Container();
+  const focusRing = new Graphics();
   const motion = new Graphics();
+  focusRing.eventMode = 'none';
   let artKey = '';
   let visitorKey = '';
   visitArt.addChild(visitor, reward);
   visitor.on('pointertap', hurryVisitor);
-  app.stage.addChild(art, visitArt, scene, motion);
+  app.stage.addChild(art, visitArt, scene, focusRing, motion);
 
   function box(layer: Container, b: Rect, fill: number, border?: number, alpha = 1, radius = 7) {
     const shape = new Graphics().roundRect(b.x, b.y, b.w, b.h, radius).fill({ color: fill, alpha });
@@ -138,21 +145,12 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     if (!frame) frame = requestAnimationFrame(drawMotion);
   }
 
-  function spread() {
-    const bay = roomLayout(w, h).bay;
-    const narrow = w < 710 || bay.w < 432;
-    const width = narrow ? Math.min(w - 16, 516) : bay.w;
-    const height = Math.min(h - 115, Math.max(418, bay.h));
-    const top = Math.max(63, Math.min(h - 52 - height, bay.y + Math.min(81, bay.h * .21)));
-    return rect(narrow ? (w - width) / 2 : bay.x - Math.min(61, bay.w * .08), top, width, height);
-  }
-
   function drawMotion(now: number) {
     frame = 0;
     motion.clear();
     if (disposed || !transition || !panel) return;
-    const end = spread();
-    const book = phaseBooks[playback ? 'open' : props().campaign.state.phase];
+    const end = roomLayout(w, h).page;
+    const book = panel === 'journal' ? journalTheme : phaseBooks[playback ? 'open' : props().campaign.state.phase];
     const p = Math.min(1, (now - transition.start) / (transition.kind === 'open' ? 270 : 210));
     if (transition.kind === 'open' && readingLayer) readingLayer.alpha = Math.max(0, (p - .38) / .62);
     if (p < 1) {
@@ -206,7 +204,22 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     render();
   }
 
+  function paintFocus() {
+    focusRing.clear();
+    const name = (document.activeElement as HTMLElement | null)?.dataset.canvasAction;
+    const bounds = name ? focusBounds.get(name) : undefined;
+    if (bounds) focusRing.roundRect(bounds.x, bounds.y, bounds.w, bounds.h, 7).stroke({ color: gold, width: 3 });
+  }
+
+  function refreshFocus() {
+    if (disposed) return;
+    // Keep the event targets stable if a pointer press moves focus away from a keyboard control.
+    paintFocus();
+    app.render();
+  }
+
   function sync(actions: Action[]) {
+    focusBounds = new Map(actions.map(action => [action.id, action.box]));
     const ids = new Set(actions.map(action => action.id));
     for (const [id, button] of semantic) {
       if (!ids.has(id)) { button.remove(); semantic.delete(id); }
@@ -219,8 +232,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         button.type = 'button';
         button.dataset.canvasAction = action.id;
         semantic.set(action.id, button);
-        button.addEventListener('focus', () => requestAnimationFrame(render));
-        button.addEventListener('blur', () => requestAnimationFrame(render));
+        button.addEventListener('focus', () => requestAnimationFrame(refreshFocus));
+        button.addEventListener('blur', () => requestAnimationFrame(refreshFocus));
       }
       if (keyboard.children[position] !== button) keyboard.insertBefore(button, keyboard.children[position] ?? null);
       position++;
@@ -346,7 +359,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       presentBusiness(nextPresentation);
       lastPresentation = nextPresentation;
     }
-    const theme = phaseBooks[phase];
+    const theme = panel === 'journal' ? journalTheme : phaseBooks[phase];
     const town = TOWNS.find(t => t.id === state.townId);
     const preview = TOWNS[selectedTown];
     const blocked = p.busy || p.pending || !p.online || !!playback;
@@ -361,15 +374,14 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     function control(layer: Container, id: string, title: string, bounds: Rect, run: () => void, options: {
       copy?: string; hide?: boolean; active?: boolean; disabled?: boolean; paper?: boolean; primary?: boolean;
     } = {}) {
-      const focused = document.activeElement === semantic.get(id);
       const item = new Container();
-      const border = focused ? gold : options.paper ? 0xa87958 : options.active || options.primary ? gold : 0xa77a59;
+      const border = options.paper ? 0xa87958 : options.active || options.primary ? gold : 0xa77a59;
       const base = options.primary ? (options.paper ? theme.cover : 0xe4ac69)
         : options.active ? (options.paper ? 0xd4b88d : 0x755143) : options.paper ? 0xf4e4c4 : 0x382a33;
       const shape = options.hide
-        ? new Graphics().roundRect(bounds.x, bounds.y, bounds.w, bounds.h, 6).stroke({ color: border, width: focused ? 3 : 2 })
+        ? new Graphics().roundRect(bounds.x, bounds.y, bounds.w, bounds.h, 6).stroke({ color: border, width: 2 })
         : box(item, bounds, base, border, options.disabled ? .68 : .97);
-      if (options.hide) { shape.alpha = focused ? 1 : 0; item.addChild(shape); }
+      if (options.hide) { shape.alpha = 0; item.addChild(shape); }
       if (!options.hide) text(item, options.copy ?? title, bounds.x + bounds.w / 2, bounds.y + bounds.h / 2, {
         align: 'center', max: Math.max(26, bounds.w - 10), size: narrow ? 13 : 15,
         color: options.paper ? options.primary ? cream : paperInk : options.primary ? ink : options.disabled ? muted : cream,
@@ -381,8 +393,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
           item.hitArea = new Rectangle(bounds.x, bounds.y, bounds.w, bounds.h);
           item.cursor = 'pointer';
           item.on('pointertap', run);
-          item.on('pointerover', () => { shape.alpha = options.hide ? focused ? 1 : .58 : .82; app.render(); });
-          item.on('pointerout', () => { shape.alpha = options.hide && !focused ? 0 : 1; app.render(); });
+          item.on('pointerover', () => { shape.alpha = options.hide ? .58 : .82; app.render(); });
+          item.on('pointerout', () => { shape.alpha = options.hide ? 0 : 1; app.render(); });
         }
       }
       layer.addChild(item);
@@ -411,9 +423,18 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       show('book', 'book');
     }
 
+    if (town && phase !== 'travel') {
+      const journalName = `${town.name} Journal`;
+      const journalW = Math.min(155, layout.bay.x - margin - 13);
+      control(scene, 'town-journal', `Open ${journalName}`, rect(margin + 3, 67, journalW, 44), () => {
+        journalArticle = null;
+        show('journal', 'town-journal');
+      }, { copy: journalName });
+    }
+
     const bookName = { travel: 'Open destination book', prepare: 'Open wholesale book', open: 'Open business book', report: 'Day’s takings' }[phase];
     control(scene, 'book', bookName, layout.book, openBook, { hide: true });
-    if (!modal) text(scene, theme.title, layout.book.x + layout.book.w * .52, layout.book.y + layout.book.h * .50,
+    if (!modal) text(scene, phaseBooks[phase].title, layout.book.x + layout.book.w * .52, layout.book.y + layout.book.h * .50,
       { serif: true, size: narrow ? 13 : 17, align: 'center', max: layout.book.w - 14 });
     if (phase === 'travel') {
       control(scene, 'dial', 'Turn the door dial', layout.dial, openBook, { hide: true });
@@ -457,10 +478,11 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       const body = layout.visitor;
       control(scene, 'hurry-visitor', 'Hurry this visitor', rect(body.x, body.y, body.w, body.h * 1.08), hurryVisitor, { hide: true });
     }
-    if (playback || focusOutcome) {
-      const cardW = Math.min(narrow ? 298 : 370, w - 2 * margin - 12);
-      const cardX = Math.max(margin + 6, Math.min(w - cardW - margin - 6, layout.visitor.x - cardW * .35));
-      const cardY = Math.max(65, layout.visitor.y - 112);
+    if (!modal && (playback || focusOutcome)) {
+      const rightEdge = layout.portrait ? w - margin : layout.bay.x - 13;
+      const cardW = Math.min(narrow ? 298 : 370, rightEdge - margin - 6);
+      const cardX = Math.max(margin + 6, Math.min(rightEdge - cardW, layout.visitor.x - cardW * .35));
+      const cardY = layout.portrait ? layout.page.y + 26 : Math.max(116, layout.visitor.y - 112);
       const sale = focusOutcome && latest && latest.price !== null ? latest : undefined;
       const cardAccent = sale ? gold : focusOutcome ? 0xca9986 : 0x9ba99c;
       const index = playback?.index ?? latest?.customerIndex ?? served - 1;
@@ -486,8 +508,10 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       phase === 'prepare' ? state.buyingComplete ? 'Set up your displays and open the shop.' : 'Open the supplier ledger to compare vendors.' :
       phase === 'open' ? latestOutcome?.line ?? state.log[served - 1] ?? 'The shop is open. Customers are on their way.' :
       'The shop is closed. Review your accounts when ready.');
-    box(scene, rect(margin, h - 43, w - margin * 2, 35), ink, 0x76574b, .94);
-    text(scene, tip, w / 2, h - 25, { align: 'center', max: w - margin * 2 - 14, size: narrow ? 11 : 13, color: p.error ? 0xffbcb0 : muted });
+    if (!modal || !layout.portrait) {
+      box(scene, rect(margin, h - 43, w - margin * 2, 35), ink, 0x76574b, .94);
+      text(scene, tip, w / 2, h - 25, { align: 'center', max: w - margin * 2 - 14, size: narrow ? 11 : 13, color: p.error ? 0xffbcb0 : muted });
+    }
     if (!modal && p.pending && p.online && !p.busy) {
       control(scene, 'retry', 'Confirm last action', rect(w / 2 - 88, h - 102, 176, 44), () => p.send(), { primary: true });
     }
@@ -497,27 +521,30 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       readingLayer = overlay;
       if (transition?.kind === 'open') overlay.alpha = Math.max(0, (performance.now() - transition.start - 103) / 167);
       scene.addChild(overlay);
-      const shade = new Graphics().rect(0, 0, w, h).fill({ color: 0x14111d, alpha: .24 });
+      const { page: reading, bay } = layout;
+      const shade = new Graphics();
+      const right = bay.x + bay.w + 12;
+      const bottom = bay.y + bay.h + 13;
+      shade.rect(0, 0, w, bay.y - 9).rect(0, bay.y - 9, bay.x - 10, bottom - bay.y + 9)
+        .rect(right, bay.y - 9, w - right, bottom - bay.y + 9).rect(0, bottom, w, h - bottom)
+        .fill({ color: 0x14111d, alpha: .18 });
       shade.eventMode = 'static';
       shade.on('pointertap', close);
       overlay.addChild(shade);
-      const reading = spread();
       const { x, y } = reading;
       const rw = reading.w, rh = reading.h;
       box(overlay, rect(x - 4, y + 4, rw + 8, rh + 6), 0x1a1720, undefined, .55, 12);
       box(overlay, reading, theme.cover, theme.edge, 1, 10).eventMode = 'static';
-      box(overlay, rect(x + 9, y + 10, rw - 18, rh - 18), 0xb99a79, undefined, 1, 5);
-      box(overlay, rect(x + 10, y + 6, rw / 2 - 9, rh - 17), theme.page, undefined, 1, 5);
-      box(overlay, rect(x + rw / 2 - 1, y + 6, rw / 2 - 9, rh - 17), theme.page, undefined, 1, 5);
-      overlay.addChild(new Graphics().rect(x + rw / 2 - 2, y + 12, 4, rh - 28).fill({ color: 0x9a735f, alpha: .17 })
-        .moveTo(x + 15, y + rh - 13).lineTo(x + rw / 2 - 2, y + rh - 11)
-        .lineTo(x + rw - 15, y + rh - 13).stroke({ color: 0xe2c4a0, width: 1 }));
+      box(overlay, rect(x + 6, y + 8, rw - 12, rh - 15), 0xc09872, undefined, 1, 7);
+      box(overlay, rect(x + 8, y + 4, rw - 16, rh - 17), theme.page, 0xe6be86, 1, 7);
+      box(overlay, rect(x + 13, y + 10, rw - 26, rh - 29), theme.page, 0xb98c63, 1, 6);
       const left = x + 20;
       const inner = rw - 40;
       const foot = rh - 64;
       const title = (copy: string, max = inner - 43) => {
         readingTitle = copy;
-        text(overlay, copy, left, y + 29, { color: paperInk, serif: true, size: narrow ? 21 : 27, max });
+        box(overlay, rect(left - 2, y + 12, max + 1, 33), theme.cover, theme.edge, 1, 4);
+        text(overlay, copy, left + 7, y + 28, { serif: true, size: narrow ? 20 : 23, max: max - 14 });
       };
       const words = (copy: string, dx: number, dy: number, options: Parameters<typeof text>[4] = {}) => {
         readingLines.push(copy);
@@ -539,6 +566,85 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       };
 
       if (!state.pendingNegotiation || playback) button('dismiss', 'Close panel', inner - 41, 8, 43, close, { copy: '×' });
+      if (panel === 'journal' && town) {
+        const goodId = journalGoods[town.id];
+        const listedPrice = (day: number) => Math.min(...Object.values(vendorOffersForTown({
+          seed: state.seed, day, vendorReputation: {},
+        }, town.id)).flat().filter(offer => offer.kind === 'regular' && offer.goodId === goodId).map(offer => offer.unitCost));
+        const days = Math.min(state.day, 5);
+        const prices = Array.from({ length: days }, (_, index) => {
+          const day = state.day - days + index + 1;
+          return { day, price: listedPrice(day) };
+        });
+        const offers = state.marketDay === state.day && state.townId === town.id
+          ? state.vendorOffers : vendorOffersForTown(state, town.id);
+        const news = vendorsInTown(town.id).flatMap(vendor => {
+          const deal = offers[vendor.id]?.find(offer => offer.kind === 'dailyDeal');
+          if (!deal) return [];
+          return [{
+            title: `${vendor.name} · ${nameOf(deal.goodId)} ${money(deal.unitCost)}`,
+            source: vendor.name,
+            detail: deal.quantity === 0 ? 'Today’s deal is sold out.'
+              : `${deal.quantity} ${nameOf(deal.goodId).toLowerCase()} available at ${money(deal.unitCost)} per unit today.`,
+          }];
+        });
+        title(`${town.name} Journal`);
+        const article = journalArticle === null ? undefined : news[journalArticle];
+        if (article) {
+          button('journal-overview', 'Back to journal', 0, 55, inner, () => {
+            const index = journalArticle;
+            journalArticle = null;
+            focus(`journal-news-${index}`);
+            animate('turn');
+            render();
+          }, { copy: '‹ Journal' });
+          words(article.source, 0, 131, { serif: true, size: 19, max: inner });
+          rule(154);
+          note(article.detail, 184);
+        } else {
+          const split = Math.round(inner * .40);
+          words('Town report', 0, 75, { serif: true, size: 16, max: split - 5 });
+          words('Local specialty', 0, 104, { size: 12, color: paperMuted, max: split - 8 });
+          words(town.specialty, 0, 133, { serif: true, size: 16, max: split - 8 });
+          words('Market history', split + 12, 75, { serif: true, size: 16, max: inner - split - 13 });
+          words(`${nameOf(goodId)} · regular price`, split + 12, 99, { size: 12, color: paperMuted, max: inner - split - 13 });
+          const plot = rect(left + split + 34, y + 118, inner - split - 42, 65);
+          const min = Math.max(0, Math.min(...prices.map(point => point.price)) - 1);
+          const max = Math.max(...prices.map(point => point.price)) + 1;
+          const chart = new Graphics();
+          chart.moveTo(left + split, y + 62).lineTo(left + split, y + 202).stroke({ color: 0xb28d70, width: 1 });
+          for (const fraction of [0, .5, 1]) {
+            const row = plot.y + fraction * plot.h;
+            chart.moveTo(plot.x, row).lineTo(plot.x + plot.w, row).stroke({ color: 0xba9575, alpha: .65, width: 1 });
+          }
+          words(money(max), split + 29, 118, { align: 'right', size: 10, color: paperMuted });
+          words(money(min), split + 29, 183, { align: 'right', size: 10, color: paperMuted });
+          const points = prices.map(({ price }, index) => ({
+            x: plot.x + plot.w * (days === 1 ? .5 : index / (days - 1)),
+            y: plot.y + plot.h * ((max - price) / (max - min)),
+          }));
+          if (points.length > 1) {
+            chart.moveTo(points[0].x, points[0].y);
+            points.slice(1).forEach(point => chart.lineTo(point.x, point.y));
+            chart.stroke({ color: 0x843a59, width: 2.5 });
+          }
+          points.forEach(point => chart.circle(point.x, point.y, 3).fill(0x843a59));
+          overlay.addChild(chart);
+          prices.forEach(({ day, price }, index) => {
+            text(overlay, `D${day}`, points[index].x, plot.y + plot.h + 13, { align: 'center', color: paperMuted, size: 10 });
+            readingLines.push(`Day ${day}, ${money(price)}`);
+          });
+          rule(213);
+          words('Market news', 0, 228, { serif: true, size: 16 });
+          if (!news.length) note('There are no market notices today.', 265);
+          news.forEach((notice, index) => button(`journal-news-${index}`, notice.title, 0, 242 + index * 46, inner, () => {
+            journalArticle = index;
+            focus('journal-overview');
+            animate('turn');
+            render();
+          }, { copy: `${notice.title}  ›` }));
+        }
+      }
       if (panel === 'stock') {
         title('Stock chest');
         GOODS.forEach((good, i) => line(good.name, String(visibleStock(good.id)), 65 + i * 32));
@@ -547,7 +653,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         line('Cash remaining', money(cash), 299);
       }
       if (panel === 'book' && phase === 'travel') {
-        title('Route Atlas', inner - 136);
+        title('Route Atlas');
         const cell = (inner - 12) / 3;
         TOWNS.forEach((destination, i) => button(`preview-${destination.id}`, `Preview ${destination.name}`,
           i * (cell + 6), 56, cell, () => {
@@ -556,12 +662,6 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
             render();
           }, { copy: destination.name, active: i === selectedTown }));
         const destination = preview ?? TOWNS[0];
-        const illustration = new Graphics();
-        const illustrationBounds = rect(left + inner - 128, y + 15, 87, 28);
-        drawVista(illustration, illustrationBounds, destination.id);
-        illustration.rect(illustrationBounds.x, illustrationBounds.y, illustrationBounds.w, illustrationBounds.h)
-          .stroke({ color: 0xa87958, width: 1.5 });
-        overlay.addChild(illustration);
         const rates = Object.entries(vendorOffersForTown(state, destination.id)).flatMap(([vendorId, offers]) =>
           offers.filter(offer => reputationFor(state, vendorId).tier >= (offer.requiredTier ?? 0)));
         note(`${destination.specialty} · ${money(state.gold)} available`, 115);
@@ -851,7 +951,10 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       }
 
       if (p.pending && p.online && !p.busy) {
-        control(overlay, 'retry', 'Confirm last action', rect(w / 2 - 88, h - 48, 176, 43), () => p.send(), { primary: true });
+        button('retry', 'Confirm last action', 0, foot, inner, () => p.send(), { primary: true });
+      }
+      if (layout.portrait && (p.error || !p.online || p.busy)) {
+        text(overlay, tip, x + rw / 2, y + rh - 12, { align: 'center', color: paperInk, size: 10, max: inner });
       }
     }
 
@@ -872,6 +975,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       semantic.get(nextFocus)?.focus({ preventScroll: true });
       nextFocus = '';
     }
+    paintFocus();
     paintVisit(performance.now());
     if ((playback || offerArrival !== undefined) && !visitFrame && !reducedMotion.matches && !document.hidden) {
       visitFrame = requestAnimationFrame(animateVisit);
@@ -1038,7 +1142,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     if (!width || !height || width === backingWidth && height === backingHeight) return;
     backingWidth = width;
     backingHeight = height;
-    scale = Math.min(1, height / 505, width / 320);
+    scale = shopScale(width, height);
     w = width / scale;
     h = height / scale;
     transition = undefined;
@@ -1046,6 +1150,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     art.scale.set(scale);
     visitArt.scale.set(scale);
     scene.scale.set(scale);
+    focusRing.scale.set(scale);
     motion.scale.set(scale);
     app.renderer.resize(width, height);
     render();

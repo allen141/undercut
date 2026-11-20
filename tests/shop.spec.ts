@@ -5,6 +5,7 @@ import { expect, test as base, type Page } from '@playwright/test';
 import { Pool } from 'pg';
 import type { CommandRequest } from '@undercut/contracts';
 import { WINDOW_SLOT_INDEX, applyCommand, newGame, quantity, type State } from '@undercut/game-core';
+import { roomLayout, shopScale } from '../apps/web/src/ShopLayout.js';
 
 const run = promisify(execFile);
 const password = 'browser-test-credential-41';
@@ -110,6 +111,32 @@ async function chooseTown(page: Page, name: string, keyboard = false) {
   }
   await activate(page, 'Preview ' + name);
   await activate(page, 'Choose ' + name);
+}
+
+async function checkTownJournal(page: Page, name: string, issue: string, picture: string, day: number) {
+  const canvas = (await shopCanvas(page).boundingBox())!;
+  const scale = shopScale(canvas.width, canvas.height);
+  const layout = roomLayout(canvas.width / scale, canvas.height / scale);
+  const clip = {
+    x: canvas.x + (layout.bay.x + layout.bay.w * .24) * scale,
+    y: canvas.y + (layout.bay.y + layout.bay.h * .18) * scale,
+    width: layout.bay.w * .52 * scale,
+    height: layout.bay.h * .65 * scale,
+  };
+  const windowBefore = await page.screenshot({ clip });
+  await activate(page, `Open ${name} Journal`);
+  const journal = page.getByRole('region', { name: `${name} Journal` });
+  await expect(journal).toContainText('Market history');
+  await expect(journal).toContainText('Market news');
+  await expect(journal).toContainText(`Day ${day}, `);
+  // Check the rendered pixels to catch dimming as well as pages covering the glass.
+  await expect.poll(async () => (await page.screenshot({ clip })).equals(windowBefore)).toBe(true);
+  await screenshot(page, picture);
+  await activate(page, new RegExp(issue));
+  await expect(journal).toContainText(/(?:available at|sold out)/);
+  await activate(page, 'Back to journal');
+  await expect(journal).toContainText('Market history');
+  await activate(page, 'Close panel');
 }
 
 async function visit(page: Page, vendor: string) {
@@ -287,6 +314,7 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await screenshot(page, info.outputPath('01-travel.png'));
   await chooseTown(page, 'Meadow');
   await expectRevision(page, 1);
+  await checkTownJournal(page, 'Meadow', '^Mill Yard ·', info.outputPath('journal-portrait.png'), 1);
   await visit(page, 'Mill Yard');
   await expectRevision(page, 2);
   await buy(page, 'Grain', 3);
@@ -314,6 +342,7 @@ test('trades a full day and returns with its ledger and remaining stock', async 
     await expect.poll(() => dial.boundingBox()).not.toEqual(portraitDial);
     await chooseTown(page, 'Harbor');
     await expectRevision(page, closingRevision + 2);
+    await checkTownJournal(page, 'Harbor', '^Dockside Lots ·', info.outputPath('journal-landscape.png'), 2);
     await visit(page, 'Dockside Lots');
     await expectRevision(page, closingRevision + 3);
     await buy(page, 'Tea');
