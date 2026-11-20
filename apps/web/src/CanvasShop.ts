@@ -1,4 +1,4 @@
-import { AccessibilitySystem, Application, Container, Graphics, Rectangle, Text, extensions } from 'pixi.js';
+import { AccessibilitySystem, Application, Container, Graphics, Rectangle, Sprite, Text, extensions } from 'pixi.js';
 import 'pixi.js/browser';
 import 'pixi.js/unsafe-eval';
 import {
@@ -6,7 +6,8 @@ import {
   inventoryValue, priceRange, quantity, reputationFor, vendorOffersForTown, vendorsInTown, type CustomerResult, type GoodId,
 } from '@undercut/game-core';
 import type { BusinessPresentation, GameProps } from './Game.js';
-import { drawCoin, drawCustomer, drawGood, drawRoom, phaseBooks } from './ShopArt.js';
+import { customerPortrait, drawRoom, phaseBooks, setCoin, setGood } from './ShopArt.js';
+import { loadShopTextures, placeSprite, skin } from './ShopAssets.js';
 import { roomLayout, shopScale, type Bounds } from './ShopLayout.js';
 
 extensions.remove(AccessibilitySystem);
@@ -60,6 +61,10 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     failIfMajorPerformanceCaveat: false, autoDensity: false, antialias: true, autoStart: false,
     resolution: Math.min(devicePixelRatio || 1, 2), background: 0x171b25,
   });
+  const textures = await loadShopTextures().catch(error => {
+    app.destroy();
+    throw error;
+  });
   host.append(app.canvas);
   app.canvas.setAttribute('aria-hidden', 'true');
   app.canvas.dataset.renderer = app.renderer.name;
@@ -101,15 +106,19 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const art = new Container();
   const visitArt = new Container();
-  const visitor = new Graphics();
-  const reward = new Graphics();
+  const visitor = new Container();
+  const foreground = new Container();
+  const reward = new Container();
+  const tradedGood = new Sprite();
+  const coins = Array.from({ length: 3 }, () => new Sprite(textures.coin));
+  reward.addChild(tradedGood, ...coins);
   const scene = new Container();
   const focusRing = new Graphics();
   const motion = new Graphics();
   focusRing.eventMode = 'none';
   let artKey = '';
   let visitorKey = '';
-  visitArt.addChild(visitor, reward);
+  visitArt.addChild(visitor, foreground, reward);
   visitor.on('pointertap', hurryVisitor);
   app.stage.addChild(art, visitArt, scene, focusRing, motion);
 
@@ -257,7 +266,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   }
 
   function paintVisit(now: number) {
-    reward.clear();
+    tradedGood.visible = false;
+    for (const coin of coins) coin.visible = false;
     const state = props().campaign.state;
     const index = playback?.index ?? state.pendingNegotiation?.customerIndex;
     const canHurry = playback && !playback.revealed && panel === null;
@@ -271,8 +281,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const body = layout.visitor;
     const key = `${state.seed}:${state.day}:${index}:${w}:${h}`;
     if (key !== visitorKey) {
-      visitor.clear();
-      drawCustomer(visitor, body, state.seed, index);
+      visitor.removeChildren().forEach(child => child.destroy());
+      visitor.addChild(customerPortrait(textures, state.seed, index, body));
       visitor.hitArea = new Rectangle(body.x, body.y, body.w, body.h * 1.08);
       visitorKey = key;
     }
@@ -286,9 +296,10 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const arrival = playback?.negotiated ? 1 : Math.min(1, elapsed / 420);
     const exit = playback ? Math.max(0, Math.min(1, 1 - (visitDuration - elapsed) / visitExitDuration)) : 0;
     const doorway = layout.door.x + layout.door.w * .77 - (body.x + body.w / 2);
+    const doorDepth = layout.door.y + layout.door.h - (body.y + body.h);
     const step = Math.max((1 - arrival) ** 2, exit ** 2);
     const thinking = playback && !playback.revealed && arrival === 1 ? Math.sin(elapsed / 210) * 2 : 0;
-    visitor.position.set(doorway * step, -Math.sin(step * Math.PI * 2) * 4 + thinking);
+    visitor.position.set(doorway * step, doorDepth * step - Math.sin(step * Math.PI * 2) * 4 + thinking);
     visitor.alpha = Math.min(1, .28 + arrival * 3, 1 - exit ** 2);
 
     if (!playback?.revealed) return;
@@ -304,14 +315,14 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       const t = Math.min(1, progress / .75);
       const fromX = display.x + display.w * .18;
       const fromY = display.y + display.h * (slot === WINDOW_SLOT_INDEX ? .80 : .57);
-      drawGood(reward, result.goodId, animateArc(fromX, customerX, t), animateArc(fromY, customerY, t) -
+      setGood(tradedGood, textures, result.goodId, animateArc(fromX, customerX, t), animateArc(fromY, customerY, t) -
         Math.sin(Math.PI * t) * 24, 18);
     }
     const coinX = layout.bell.x + layout.bell.w * .5;
     const coinY = layout.bell.y + layout.bell.h * .53;
     for (let i = 0; i < 3; i++) {
       const t = Math.max(0, Math.min(1, (progress - i * .12) / .73));
-      if (t > 0 && t < 1) drawCoin(reward, animateArc(customerX, coinX, t), animateArc(customerY, coinY, t) -
+      if (t > 0 && t < 1) setCoin(coins[i], animateArc(customerX, coinX, t), animateArc(customerY, coinY, t) -
         Math.sin(Math.PI * t) * (32 + i * 12), 7, .44 + Math.abs(Math.cos(t * Math.PI * 3)) * .56);
     }
   }
@@ -379,13 +390,22 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       const border = options.paper ? 0xa87958 : options.active || options.primary ? gold : 0xa77a59;
       const base = options.primary ? (options.paper ? theme.cover : 0xe4ac69)
         : options.active ? (options.paper ? 0xd4b88d : 0x755143) : options.paper ? 0xf4e4c4 : 0x382a33;
+      const drawnSkin = options.paper || options.primary;
       const shape = options.hide
         ? new Graphics().roundRect(bounds.x, bounds.y, bounds.w, bounds.h, 6).stroke({ color: border, width: 2 })
-        : box(item, bounds, base, border, options.disabled ? .68 : .97);
-      if (options.hide) { shape.alpha = 0; item.addChild(shape); }
+        : drawnSkin
+          ? skin(textures[options.primary ? 'button-primary' : 'button-secondary'], bounds, 22, 16)
+          : box(item, bounds, base, border);
+      if (options.hide || drawnSkin) item.addChild(shape);
+      const alpha = options.hide ? 0 : options.disabled ? .62 : 1;
+      shape.alpha = alpha;
+      if (drawnSkin && !options.hide && options.active) {
+        item.addChild(new Graphics().roundRect(bounds.x + 3, bounds.y + 3, bounds.w - 6, bounds.h - 6, 7)
+          .stroke({ color: 0xaf6529, width: 2 }));
+      }
       if (!options.hide) text(item, options.copy ?? title, bounds.x + bounds.w / 2, bounds.y + bounds.h / 2, {
         align: 'center', max: Math.max(26, bounds.w - 10), size: narrow ? 13 : 15,
-        color: options.paper ? options.primary ? cream : paperInk : options.primary ? ink : options.disabled ? muted : cream,
+        color: options.primary ? cream : options.paper ? paperInk : options.disabled ? muted : cream,
       });
       if (!modal || layer !== scene) {
         actions.push({ id, label: title, box: bounds, run, disabled: options.disabled, active: options.active });
@@ -395,7 +415,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
           item.cursor = 'pointer';
           item.on('pointertap', run);
           item.on('pointerover', () => { shape.alpha = options.hide ? .58 : .82; app.render(); });
-          item.on('pointerout', () => { shape.alpha = options.hide ? 0 : 1; app.render(); });
+          item.on('pointerout', () => { shape.alpha = alpha; app.render(); });
         }
       }
       layer.addChild(item);
@@ -404,10 +424,11 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const townId = phase === 'travel' ? preview?.id : undefined;
     const artShelf = panel === 'shelf' || panel === 'price' ? selectedShelf : undefined;
     const displayState = state.shelves.map(shelf => [shelf.goodId, shelf.goodId ? Math.min(5, visibleStock(shelf.goodId)) : 0]);
-    const key = JSON.stringify([w, h, phase, townId ?? state.townId, artShelf, modal, displayState]);
+    const key = JSON.stringify([w, h, phase, townId ?? state.townId, artShelf, displayState]);
     if (key !== artKey) {
       art.removeChildren().forEach(child => child.destroy({ children: true }));
-      drawRoom(art, w, h, { ...state, phase }, { townId, selectedShelf: artShelf, bookOpen: modal, stock: visibleStock });
+      foreground.removeChildren().forEach(child => child.destroy({ children: true }));
+      drawRoom(art, foreground, textures, w, h, { ...state, phase }, { townId, selectedShelf: artShelf, stock: visibleStock });
       artKey = key;
     }
 
@@ -426,7 +447,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
     if (town && phase !== 'travel') {
       const journalName = `${town.name} Journal`;
-      const journalW = Math.min(155, layout.bay.x - margin - 13);
+      const journalW = Math.min(155, layout.bay.x + layout.bay.w * .20 - margin - 13);
       control(scene, 'town-journal', `Open ${journalName}`, rect(margin + 3, 67, journalW, 44), () => {
         journalArticle = null;
         show('journal', 'town-journal');
@@ -435,8 +456,13 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
     const bookName = { travel: 'Open destination book', prepare: 'Open wholesale book', open: 'Open business book', report: 'Day’s takings' }[phase];
     control(scene, 'book', bookName, layout.book, openBook, { hide: true });
-    if (!modal) text(scene, phaseBooks[phase].title, layout.book.x + layout.book.w * .52, layout.book.y + layout.book.h * .50,
-      { serif: true, size: narrow ? 13 : 17, align: 'center', max: layout.book.w - 14 });
+    if (!modal) {
+      const { x, y, w: width, h: height } = layout.book;
+      const nameplate = skin(textures['button-primary'], rect(x, y + height - 24, width, 29), 21, 12);
+      scene.addChild(nameplate);
+      text(scene, phaseBooks[phase].title, x + width / 2, y + height - 10,
+        { serif: true, size: narrow ? 13 : 16, align: 'center', max: width - 12 });
+    }
     if (phase === 'travel') {
       control(scene, 'dial', 'Turn the door dial', layout.dial, openBook, { hide: true });
       text(scene, 'Turn dial', layout.dial.x + layout.dial.w / 2, layout.dial.y + layout.dial.h + 9,
@@ -495,10 +521,11 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         { size: narrow ? 21 : 24, serif: true, max: cardW - (sale ? 121 : 28) });
       text(scene, detail, cardX + 14, cardY + 79, { size: narrow ? 13 : 14, max: cardW - (sale ? 115 : 28) });
       if (sale) {
-        const badge = new Graphics();
-        drawGood(badge, sale.goodId, cardX + cardW - 52, cardY + 48, 27);
-        drawCoin(badge, cardX + cardW - 79, cardY + 77, 9);
-        scene.addChild(badge);
+        const good = new Sprite();
+        const coin = new Sprite(textures.coin);
+        setGood(good, textures, sale.goodId, cardX + cardW - 52, cardY + 48, 27);
+        setCoin(coin, cardX + cardW - 79, cardY + 77, 9);
+        scene.addChild(good, coin);
         text(scene, `+${money(sale.price!)}`, cardX + cardW - 65, cardY + 77, { size: 19, color: gold });
       }
     }
@@ -535,17 +562,20 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       const { x, y } = reading;
       const rw = reading.w, rh = reading.h;
       box(overlay, rect(x - 4, y + 4, rw + 8, rh + 6), 0x1a1720, undefined, .55, 12);
-      box(overlay, reading, theme.cover, theme.edge, 1, 10).eventMode = 'static';
-      box(overlay, rect(x + 6, y + 8, rw - 12, rh - 15), 0xc09872, undefined, 1, 7);
-      box(overlay, rect(x + 8, y + 4, rw - 16, rh - 17), theme.page, 0xe6be86, 1, 7);
-      box(overlay, rect(x + 13, y + 10, rw - 26, rh - 29), theme.page, 0xb98c63, 1, 6);
+      const parchment = skin(textures['panel-large'], reading, 32, 28);
+      parchment.eventMode = 'static';
+      parchment.hitArea = new Rectangle(0, 0, rw, rh);
+      overlay.addChild(parchment);
+      const grain = placeSprite(textures.parchment, rect(x + 13, y + 51, rw - 26, rh - 70));
+      grain.alpha = .28;
+      overlay.addChild(grain);
       const left = x + 20;
       const inner = rw - 40;
       const foot = rh - 64;
       const title = (copy: string, max = inner - 43) => {
         readingTitle = copy;
-        box(overlay, rect(left - 2, y + 12, max + 1, 33), theme.cover, theme.edge, 1, 4);
-        text(overlay, copy, left + 7, y + 28, { serif: true, size: narrow ? 20 : 23, max: max - 14 });
+        overlay.addChild(skin(textures['button-primary'], rect(left - 2, y + 9, max + 1, 40), 22, 15));
+        text(overlay, copy, left + 15, y + 29, { serif: true, size: narrow ? 19 : 21, max: max - 31 });
       };
       const words = (copy: string, dx: number, dy: number, options: Parameters<typeof text>[4] = {}) => {
         readingLines.push(copy);
