@@ -17,31 +17,48 @@ const isPortrait = (width: number, height: number) => width < 740 && width < hei
 export function roomLayout(width: number, height: number) {
   const portrait = isPortrait(width, height);
   const narrow = width < 660;
-  const bookHeight = portrait ? Math.max(376, height * .43) : Math.max(402, height * .49);
-  const deskPageHeight = Math.min(505, bookHeight);
+  const bookBelowWall = portrait || (width < 1240 && height >= 660);
+  const bookHeight = bookBelowWall ? Math.max(376, height * .43) : Math.max(402, height * .49);
   const bookTop = height - bookHeight - 13;
-  const horizon = portrait ? bookTop - 8 : Math.round(height * .745);
-  const bayX = portrait ? width * .035 : Math.min(Math.max(width * .29, 365), width * .55);
-  const bay = { x: bayX, y: 63, w: width * (portrait ? .96 : .91) - bayX, h: horizon - 63 };
-  const doorHeight = Math.min(bay.h * .66, bay.w * .56);
-  const doorWidth = Math.min(bay.w * .38, doorHeight * .9);
-  const doorCenter = bay.x + bay.w * .775;
+  const horizon = bookBelowWall ? bookTop - 8 : Math.round(height * .745);
+  const wallTop = 63;
+  const sidePageHeight = Math.min(505, bookHeight);
+  const page = bookBelowWall
+    ? { x: 0, y: bookTop, w: width, h: height - bookTop }
+    : { x: 15, y: Math.max(70, (height - sidePageHeight) / 2),
+      w: Math.min(320, Math.max(280, width * .23)), h: sidePageHeight };
+
+  const wallGap = Math.min(25, width * .036);
+  const doorAreaLeft = bookBelowWall ? Math.max(10, width * .035) : page.x + page.w + 12;
+  const sideDoorRoom = Math.max(106, Math.min(250, width * .47 - doorAreaLeft - wallGap));
+  const windowX = bookBelowWall ? width * .365 : Math.max(width * .43, doorAreaLeft + wallGap + sideDoorRoom);
+  const window = { x: windowX, y: wallTop, w: width * .98 - windowX, h: horizon - wallTop };
+  const bayX = bookBelowWall ? doorAreaLeft : doorAreaLeft - 5;
+  const bay = { x: bayX, y: wallTop, w: window.x + window.w - bayX, h: window.h };
+
+  const doorAreaRight = window.x - wallGap;
+  const doorAreaWidth = doorAreaRight - doorAreaLeft;
+  const doorCenter = doorAreaLeft + doorAreaWidth / 2;
+  const doorTop = Math.max(bookBelowWall ? 123 : 83, wallTop + doorAreaWidth * .38);
+  const doorHeight = Math.min(window.h * .83, horizon - doorTop, doorAreaWidth * 1.60);
+  const doorWidth = Math.min(doorAreaWidth * .94, doorHeight * .76, width * (bookBelowWall ? .28 : .20));
   const door = { x: doorCenter - doorWidth / 2, y: horizon - doorHeight, w: doorWidth, h: doorHeight };
-  const windowWidth = bay.w * (portrait ? .54 : .52);
-  const windowBottom = horizon - Math.min(doorHeight * .19, portrait ? 36 : 72);
-  const windowHeight = Math.min(windowWidth * .91, windowBottom - (portrait ? 113 : bay.y + 16));
-  const window = { x: bay.x + bay.w * .016, y: windowBottom - windowHeight, w: windowWidth, h: windowHeight };
   const dialAboveDoor = (w: number): Bounds => {
     const h = w / dialAspect;
     return { x: doorCenter - w / 2, y: door.y - h + 4, w, h };
   };
-  const dial = dialAboveDoor(Math.max(46, Math.min(132, door.w * .60)));
-  const travelDial = dialAboveDoor(Math.min(288, Math.max(110, door.w * 1.36),
-    (width - doorCenter) * 2 - 12, (door.y - bay.y + 4) * dialAspect));
+  const journalX = width < 710 ? 11 : 22;
+  const journal = { x: journalX, y: 65, w: Math.min(155, window.x - journalX - 8), h: 44 };
+  const compactDialWidth = Math.max(38, Math.min(104, door.w * .60));
+  const dialRoom = bookBelowWall ? (door.y - journal.y - journal.h + 4) * dialAspect : compactDialWidth;
+  const dial = dialAboveDoor(Math.min(compactDialWidth, dialRoom));
+  const travelDial = dialAboveDoor(Math.min(288, door.w * 1.65,
+    (doorCenter - (bookBelowWall ? 7 : page.x + page.w + 5)) * 2,
+    (window.x - doorCenter - 8) * 2, (door.y - wallTop + 4) * dialAspect));
   const shelfW = Math.min(width * (narrow ? .25 : .19), height * .29);
   const shelfH = portrait ? 46 : Math.min(105, height * .14);
   // Keep the aisle from the door to the counter clear at either aspect ratio.
-  const shelves = portrait
+  const shelves = bookBelowWall
     ? [
       { x: width * .045, y: horizon + 5, w: shelfW, h: shelfH },
       { x: width * .70, y: horizon + 12, w: shelfW, h: shelfH },
@@ -49,12 +66,14 @@ export function roomLayout(width: number, height: number) {
     ]
     : [
       { x: width * .035, y: horizon - shelfH * .84, w: Math.min(shelfW, width * .15), h: shelfH * 1.55 },
-      { x: width * .89, y: horizon - shelfH * .54, w: Math.min(shelfW, width * .102), h: shelfH * 1.14 },
+      { x: width * .89, y: horizon + 10, w: Math.min(shelfW, width * .102), h: shelfH * 1.14 },
       { x: width * .195, y: horizon + shelfH * .05, w: Math.min(shelfW, width * .13), h: shelfH * .74 },
     ];
-  const windowDisplayHeight = Math.min(window.h, portrait ? 55 : Math.max(44, height * .102));
-  shelves.push({ x: window.x + window.w * .04, y: window.y + window.h * .89 - windowDisplayHeight * .80,
-    w: window.w * .92, h: windowDisplayHeight });
+  const windowDisplayHeight = Math.min(46, window.h * .16);
+  const windowDisplayWidth = Math.min(250, window.w * .62);
+  shelves.push({ x: window.x + (window.w - windowDisplayWidth) / 2,
+    y: window.y + window.h * .918 - windowDisplayHeight * .80,
+    w: windowDisplayWidth, h: windowDisplayHeight });
   const counterW = width * (narrow ? .90 : .86);
   const counter = { x: (width - counterW) / 2, y: height * .835, w: counterW, h: height * .165 };
   const bell = { x: counter.x + counter.w * .70, y: counter.y - 32, w: 48, h: 49 };
@@ -63,9 +82,5 @@ export function roomLayout(width: number, height: number) {
   const visitorH = portrait ? 100 : Math.min(225, height * .24);
   const visitorW = Math.min(visitorH * .90, width * .24);
   const visitor = { x: width * (portrait ? .12 : .34), y: counter.y - visitorH + 6, w: visitorW, h: visitorH };
-  const page = portrait
-    ? { x: 0, y: bookTop, w: width, h: height - bookTop }
-    : { x: Math.max(15, bay.x - 590), y: Math.max(70, (height - deskPageHeight) / 2),
-      w: Math.min(570, bay.x - 18), h: deskPageHeight };
-  return { portrait, door, window, dial, travelDial, bay, shelves, counter, bell, book, visitor, horizon, page };
+  return { portrait, bookBelowWall, door, window, dial, travelDial, journal, bay, shelves, counter, bell, book, visitor, horizon, page };
 }

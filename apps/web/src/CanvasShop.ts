@@ -452,8 +452,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
     if (town && phase !== 'travel') {
       const journalName = `${town.name} Journal`;
-      const journalW = Math.min(155, layout.door.x - margin - 13);
-      control(scene, 'town-journal', `Open ${journalName}`, rect(margin + 3, 67, journalW, 44), () => {
+      control(scene, 'town-journal', `Open ${journalName}`, layout.journal, () => {
         journalArticle = null;
         show('journal', 'town-journal');
       }, { copy: journalName });
@@ -506,10 +505,10 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       control(scene, 'hurry-visitor', 'Hurry this visitor', rect(body.x, body.y, body.w, body.h * 1.08), hurryVisitor, { hide: true });
     }
     if (!modal && playback) {
-      const rightEdge = layout.portrait ? w - margin : layout.bay.x - 13;
+      const rightEdge = layout.bookBelowWall ? w - margin : layout.bay.x - 13;
       const cardW = Math.min(narrow ? 298 : 370, rightEdge - margin - 6);
       const cardX = Math.max(margin + 6, Math.min(rightEdge - cardW, layout.visitor.x - cardW * .35));
-      const cardY = layout.portrait ? layout.page.y + 26 : Math.max(116, layout.visitor.y - 112);
+      const cardY = layout.bookBelowWall ? layout.page.y + 26 : Math.max(116, layout.visitor.y - 112);
       const sale = activeResult && latest && latest.price !== null ? latest : undefined;
       const cardAccent = sale ? gold : activeResult ? 0xca9986 : 0x9ba99c;
       box(scene, rect(cardX, cardY, cardW, 103), sale ? 0x382a2d : ink, cardAccent, .97, 10);
@@ -535,7 +534,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       phase === 'prepare' ? state.buyingComplete ? 'Set up your displays and open the shop.' : 'Open the supplier ledger to compare vendors.' :
       phase === 'open' ? latestOutcome?.line ?? state.log[served - 1] ?? 'The shop is open. Customers are on their way.' :
       'The shop is closed. Review your accounts when ready.');
-    if (!modal || !layout.portrait) {
+    if (!modal || !layout.bookBelowWall) {
       box(scene, rect(margin, h - 43, w - margin * 2, 35), ink, 0x76574b, .94);
       text(scene, tip, w / 2, h - 25, { align: 'center', max: w - margin * 2 - 14, size: narrow ? 11 : 13, color: p.error ? 0xffbcb0 : muted });
     }
@@ -550,7 +549,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       scene.addChild(overlay);
       const { page: reading, bay } = layout;
       const shade = new Graphics();
-      const right = bay.x + bay.w + 12;
+      const right = Math.min(w, bay.x + bay.w + 12);
       const bottom = bay.y + bay.h + 13;
       shade.rect(0, 0, w, bay.y - 9).rect(0, bay.y - 9, bay.x - 10, bottom - bay.y + 9)
         .rect(right, bay.y - 9, w - right, bottom - bay.y + 9).rect(0, bottom, w, h - bottom)
@@ -695,7 +694,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         ['Good', 'Price trend', 'Demand', 'Budget', 'Held'].forEach((label, i) =>
           text(overlay, label, left + columns[i], y + 100,
             { align: i === 0 ? 'left' : i === 4 ? 'right' : 'center', color: paperMuted, size: 11 }));
-        const rowHeight = layout.portrait ? 32 : 34;
+        const rowHeight = layout.bookBelowWall ? 32 : 34;
         GOODS.forEach((good, i) => {
           const prices = (offers: typeof allOffers) => offers.filter(offer => offer.goodId === good.id).map(offer => offer.unitCost);
           const localPrices = markets[selectedTown].map(offers => average(prices(offers)));
@@ -1014,7 +1013,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       if (p.pending && p.online && !p.busy) {
         button('retry', 'Confirm last action', 0, foot, inner, () => p.send(), { primary: true });
       }
-      if (layout.portrait && (p.error || !p.online || p.busy)) {
+      if (layout.bookBelowWall && (p.error || !p.online || p.busy)) {
         text(overlay, tip, x + rw / 2, y + rh - 12, { align: 'center', color: paperInk, size: 10, max: inner });
       }
     }

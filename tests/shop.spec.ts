@@ -348,13 +348,22 @@ test('previews towns on the dial and confirms the destination', { tag: '@smoke' 
   const doorCenter = room.clip(room.layout.door, .5, 0, 0, 0).x;
   const confirm = (await action(page, 'Choose Meadow').boundingBox())!;
   expect(confirm.x + confirm.width / 2).toBeCloseTo(doorCenter, 0);
-  const { portrait, window, door, horizon, page: reading } = room.layout;
-  expect(horizon / room.height).toBeGreaterThan(portrait ? .49 : .73);
-  expect(window.w / room.width).toBeGreaterThan(portrait ? .48 : .31);
-  expect(window.h / room.height).toBeGreaterThan(portrait ? .20 : .40);
-  expect(window.x + window.w).toBeLessThan(door.x);
-  if (portrait) expect(door.y + door.h).toBeLessThan(reading.y);
-  else expect(reading.x + reading.w).toBeLessThan(window.x);
+  const { bookBelowWall, window, door, horizon, page: reading, travelDial, shelves } = room.layout;
+  expect(window.w / room.width).toBeGreaterThan(bookBelowWall ? .60 : .50);
+  expect(door.w / room.width).toBeGreaterThan(.145);
+  expect(window.y).toBeLessThan(74);
+  expect(window.y + window.h).toBeCloseTo(horizon);
+  expect(door.x + door.w).toBeLessThan(window.x);
+  expect(travelDial.x + travelDial.w).toBeLessThan(window.x);
+  if (bookBelowWall) {
+    expect(window.y + window.h).toBeLessThan(reading.y);
+  } else {
+    expect(reading.x + reading.w).toBeLessThan(travelDial.x);
+    expect(reading.x + reading.w).toBeLessThan(door.x);
+  }
+  const sill = shelves[WINDOW_SLOT_INDEX];
+  expect(sill.w).toBeLessThan(window.w * .65);
+  expect(sill.y).toBeGreaterThan(window.y + window.h * .78);
   const clip = room.clip(room.layout.window, .18, .32, .64, .46);
   const meadowVista = await page.screenshot({ clip });
   await activate(page, 'Preview Forge');

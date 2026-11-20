@@ -2,7 +2,7 @@ import { Assets, NineSliceSprite, Sprite, type Texture } from 'pixi.js';
 import type { Bounds } from './ShopLayout.js';
 
 const names = [
-  'room-wall', 'room-floor', 'room-floor-portrait', 'door-open', 'door-closed', 'window-frame', 'destination-dial',
+  'room-wall', 'room-floor', 'room-floor-portrait', 'door-open', 'door-closed', 'window-frame-tall', 'destination-dial',
   'town-meadow', 'town-forge', 'town-harbor', 'shelf-empty',
   'counter', 'ledger', 'bell', 'wholesale-crate', 'lantern', 'plant-hanging',
   'good-grain', 'good-herbs', 'good-cloth', 'good-tea', 'good-iron', 'good-crystal',

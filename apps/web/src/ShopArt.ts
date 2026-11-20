@@ -43,25 +43,30 @@ function drawFrontWall(layer: Container, art: ShopTextures, door: Bounds, window
   const dy = (v: number) => door.y + door.h * v;
   const doorViewBottom = dy(open ? 1 : .65);
   const openings = new Graphics()
-    .moveTo(wx(.09), wy(.909)).lineTo(wx(.09), wy(.297))
-    .quadraticCurveTo(wx(.27), wy(.096), wx(.50), wy(.065))
-    .quadraticCurveTo(wx(.71), wy(.096), wx(.92), wy(.297))
-    .lineTo(wx(.92), wy(.909)).closePath().fill(0xffffff)
+    .moveTo(wx(.093), wy(.918)).lineTo(wx(.093), wy(.218))
+    .bezierCurveTo(wx(.14), wy(.14), wx(.33), wy(.087), wx(.50), wy(.087))
+    .bezierCurveTo(wx(.68), wy(.087), wx(.86), wy(.14), wx(.907), wy(.218))
+    .lineTo(wx(.907), wy(.918)).closePath().fill(0xffffff)
     .moveTo(dx(.20), doorViewBottom).lineTo(dx(.20), dy(.47))
     .bezierCurveTo(dx(.20), dy(.31), dx(.33), dy(.21), dx(.50), dy(.21))
     .bezierCurveTo(dx(.68), dy(.21), dx(.805), dy(.31), dx(.805), dy(.47))
     .lineTo(dx(.805), doorViewBottom).closePath().fill(0xffffff);
   const vista = new Container();
+  const left = Math.min(window.x, door.x);
+  const right = Math.max(window.x + window.w, door.x + door.w);
   const top = Math.min(window.y, door.y);
-  const outside = { x: window.x, y: top, w: door.x + door.w - window.x, h: door.y + door.h - top };
+  const bottom = Math.max(window.y + window.h, door.y + door.h);
+  const outside = { x: left, y: top, w: right - left, h: bottom - top };
   if (townId === 'harbor' || townId === 'forge' || townId === 'meadow') {
     vista.addChild(fitSprite(art[`town-${townId}`], outside, 'cover', .54));
   } else {
     vista.addChild(new Graphics().rect(outside.x, outside.y, outside.w, outside.h).fill(0x35263b));
   }
   vista.mask = openings;
-  layer.addChild(vista, openings, placeSprite(art['window-frame'], window),
-    placeSprite(art[open ? 'door-open' : 'door-closed'], door));
+  // Register the visible side posts to the layout despite the texture's transparent margins.
+  const frameWidth = window.w / .773;
+  const frame = placeSprite(art['window-frame-tall'], { ...window, x: window.x - frameWidth * .112, w: frameWidth });
+  layer.addChild(vista, openings, frame, placeSprite(art[open ? 'door-open' : 'door-closed'], door));
 }
 
 export function dialTargets(dial: Bounds) {
@@ -129,20 +134,22 @@ export function setCoin(sprite: Sprite, x: number, y: number, radius: number, st
 
 export function drawRoom(layer: Container, foreground: Container, art: ShopTextures, width: number, height: number,
   state: State, options: ArtOptions = {}) {
-  const { portrait, dial, bay, door, window, shelves, bell, book, counter, horizon } = roomLayout(width, height);
+  const { portrait, bookBelowWall, dial, travelDial, bay, door, window, shelves, bell, book, counter, horizon } = roomLayout(width, height);
   drawRoomBackground(layer, art, width, height, horizon, portrait);
   const townId = options.townId ?? state.townId;
   drawFrontWall(layer, art, door, window, townId, state.phase === 'open');
   if (state.phase !== 'travel') drawDial(layer, art, dial, townId);
 
-  const lanternW = Math.min(39, (door.x - window.x - window.w) * .82);
-  const lantern = { x: (window.x + window.w + door.x - lanternW) / 2, y: bay.y + 12,
+  const dialRight = travelDial.x + travelDial.w;
+  const lanternW = Math.min(34, (window.x - dialRight) * .75);
+  const lantern = { x: (dialRight + window.x - lanternW) / 2, y: bay.y + 12,
     w: lanternW, h: lanternW * 1.5 };
   layer.addChild(glow(lantern.x + lantern.w / 2, lantern.y + lantern.h * .6, 64, 0xffbb62),
     fitSprite(art.lantern, lantern));
-  const plantW = Math.min(portrait ? 48 : 113, width * .15);
-  const plantX = portrait ? width * .20 - plantW / 2 : width * .98 - plantW;
-  layer.addChild(fitSprite(art['plant-hanging'], { x: plantX, y: 57, w: plantW, h: plantW * 1.35 }));
+  if (!bookBelowWall) {
+    const plantW = Math.min(82, bay.x - 190);
+    layer.addChild(fitSprite(art['plant-hanging'], { x: bay.x - plantW - 12, y: 57, w: plantW, h: plantW * 1.35 }));
+  }
   shelves.forEach((bounds, index) => {
     const shelf = state.shelves[index];
     const stock = shelf?.goodId ? options.stock?.(shelf.goodId) ?? quantity(state, shelf.goodId) : 0;

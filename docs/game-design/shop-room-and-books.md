@@ -2,11 +2,11 @@
 
 ## Persistent room
 
-The active campaign uses the full viewport for a single Pixi scene. The back wall dominates the room, with a wide display window beside the separate arched door. One panorama forms the town view through both openings. The door opens clear of the street view during business and closes during destination selection, buying, and closing. Three floor displays and the window sill show the current stock. The counter, bell, and ledger sit in the foreground, with the customer behind the counter during a visit.
+The active campaign uses the full viewport for a single Pixi scene. The back wall has a separate arched door on the left and a floor-to-ceiling bay window on the right. The window occupies most of the view. One panorama forms the town view through both openings. The door opens clear of the street view during business and closes during destination selection, buying, and closing. Three floor displays and a narrow section of the window sill show the current stock. The counter, bell, and ledger sit in the foreground, with the customer behind the counter during a visit.
 
 The scene builds depth through its draw order. The illustrated timber wall and floor share a horizon with the doorway and shelves. The scenery layer clips the selected town painting to both openings in one coordinate space. The frames, lantern, and display goods sit in front of the painting. Customers enter and leave through the doorway. The counter and props render above the visitor, followed by sale effects, book pages, and controls. Portrait uses compact floor displays below the wall openings. Wide layouts set the displays on either side and set the counter farther forward.
 
-The runtime WebP textures in `apps/web/public/shop-art/` use the supplied Undercut Shop Assets v0.1, UI Kit v0.2 Expanded, and Front Wall and Door Assets v0.1. The window trim, carved door, open door frame, and semicircular dial are transparent crops from the front-wall sheet. The existing wall, floor, and town paintings are separate textures. Shelf contents, patrons, prices, and controls remain live layers.
+The runtime WebP textures in `apps/web/public/shop-art/` use the supplied Undercut Shop Assets v0.1, UI Kit v0.2 Expanded, and Front Wall and Door Assets v0.1. The carved door, open door frame, and semicircular dial are transparent crops from the front-wall sheet. The full-height bay window uses a matching frame with a built-in sill. The existing wall, floor, and town paintings are separate textures. Shelf contents, patrons, prices, and controls remain live layers.
 
 ## Books on the desk
 
