@@ -1,14 +1,23 @@
 export type Bounds = { x: number; y: number; w: number; h: number };
 
-export function shopScale(width: number, height: number) {
-  return Math.min(1, height / (width < 740 && width < height ? 600 : 505), width / 320);
+export function shopScale(width: number, height: number, pageScale = 1) {
+  // Mobile desktop mode can fit a wide CSS viewport into a narrower display.
+  // At larger zoom levels, keep fitting the visible area so the controls stay in reach.
+  const fit = Math.min(1, pageScale);
+  const visibleWidth = width * fit;
+  const visibleHeight = height * fit;
+  const minHeight = isPortrait(visibleWidth, visibleHeight) ? 600 : 505;
+  return Math.min(1, visibleHeight / minHeight, visibleWidth / 320) / fit;
 }
 
+const isPortrait = (width: number, height: number) => width < 740 && width < height;
+
 export function roomLayout(width: number, height: number) {
-  const portrait = width < 740 && width < height;
+  const portrait = isPortrait(width, height);
   const narrow = width < 660;
   const bayY = portrait ? 72 : Math.max(82, height * .115);
-  const bookHeight = Math.min(505, Math.max(402, height * .49));
+  const bookHeight = Math.max(402, height * .49);
+  const deskPageHeight = Math.min(505, bookHeight);
   const bookTop = height - bookHeight - 13;
   const horizon = portrait ? bookTop - 24 : Math.round(height * .65);
   const doorW = Math.min(width * .20, horizon * .52);
@@ -35,8 +44,8 @@ export function roomLayout(width: number, height: number) {
   const visitorH = portrait ? 74 : height * .18;
   const visitor = { x: width * (portrait ? .16 : .22), y: horizon - visitorH * .84, w: Math.min(58, width * .15), h: visitorH };
   const page = portrait
-    ? { x: 10, y: bookTop, w: width - 20, h: bookHeight }
-    : { x: Math.max(15, bay.x - 590), y: Math.max(70, (height - bookHeight) / 2),
-      w: Math.min(570, bay.x - 35), h: bookHeight };
+    ? { x: 0, y: bookTop, w: width, h: height - bookTop }
+    : { x: Math.max(15, bay.x - 590), y: Math.max(70, (height - deskPageHeight) / 2),
+      w: Math.min(570, bay.x - 35), h: deskPageHeight };
   return { portrait, door, dial, bay, shelves, counter, bell, book, visitor, horizon, page };
 }

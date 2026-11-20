@@ -417,6 +417,53 @@ test('fits and accepts touch within a zoomed Android viewport', async ({ page, a
   }).toBeLessThan(2);
 });
 
+test('docks the Accounts Book across a phone running in desktop viewport mode', async ({ page, account }, info) => {
+  test.skip(info.project.name !== 'mobile-chromium', 'Reproduces the wide CSS viewport of desktop mode on Android.');
+  await page.setViewportSize({ width: 393, height: 720 });
+  await invite(page, account);
+  await createCampaign(page, 'Harbor Closing');
+  const { id } = await campaignSnapshot(page);
+  let state = applyCommand({ ...newGame(27), day: 9 }, { type: 'chooseTown', townId: 'harbor' });
+  state = applyCommand(state, { type: 'finishBuying' });
+  state = applyCommand(state, { type: 'open' });
+  state = applyCommand(state, { type: 'serve' });
+  expect(state.phase).toBe('report');
+  const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  try {
+    await pool.query('UPDATE campaigns SET state = $1 WHERE id = $2', [JSON.stringify(state), id]);
+  } finally {
+    await pool.end();
+  }
+
+  await page.reload();
+  await page.getByRole('button', { name: /Harbor Closing/ }).click();
+  await activate(page, 'Day’s takings');
+  const accounts = page.getByRole('region', { name: 'Accounts Book' });
+  await expect(accounts).toContainText('Day 9 · Harbor');
+  const nextDay = action(page, 'Begin day 10');
+  const visibleBounds = () => nextDay.evaluate(button => {
+    const canvas = document.querySelector('canvas')!.getBoundingClientRect();
+    const bounds = button.getBoundingClientRect();
+    return {
+      widthShare: bounds.width / canvas.width,
+      bottomGap: (canvas.bottom - bounds.bottom) * visualViewport!.scale,
+    };
+  });
+  await expect.poll(async () => (await visibleBounds()).widthShare).toBeGreaterThan(.85);
+  await expect.poll(async () => (await visibleBounds()).bottomGap).toBeLessThan(25);
+
+  // A real phone can fit a 980 CSS pixel desktop viewport into its narrow screen.
+  // Resize while the book is open to cover that path as well as initial layout.
+  await page.locator('meta[name="viewport"]').evaluate(meta => meta.setAttribute('content', 'width=980'));
+  await expect.poll(() => page.evaluate(() => visualViewport!.width)).toBeGreaterThan(900);
+  await expect.poll(() => page.evaluate(() => visualViewport!.scale)).toBeLessThan(.6);
+  await expect.poll(async () => (await visibleBounds()).widthShare).toBeGreaterThan(.85);
+  await expect.poll(async () => (await visibleBounds()).bottomGap).toBeLessThan(25);
+  await page.screenshot({ path: info.outputPath('accounts-book-desktop-mode.png') });
+  await activate(page, 'Begin day 10');
+  await expectRevision(page, 1);
+});
+
 test('keeps two campaigns independent across two days, reconnects, and accepts a reset link', async ({ browser, context, page, account, baseURL }, info) => {
   test.skip(info.project.name !== 'desktop-chromium', 'The connection and concurrency checks run in desktop Chromium.');
   test.setTimeout(220_000);

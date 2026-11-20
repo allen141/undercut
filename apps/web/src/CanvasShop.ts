@@ -97,6 +97,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   let lastReadout = '';
   const semantic = new Map<string, HTMLButtonElement>();
   let focusBounds = new Map<string, Rect>();
+  const visualViewport = window.visualViewport;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const art = new Container();
   const visitArt = new Container();
@@ -1139,10 +1140,12 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   function resize() {
     if (disposed) return;
     const width = host.clientWidth, height = host.clientHeight;
-    if (!width || !height || width === backingWidth && height === backingHeight) return;
+    if (!width || !height) return;
+    const nextScale = shopScale(width, height, visualViewport?.scale);
+    if (width === backingWidth && height === backingHeight && nextScale === scale) return;
     backingWidth = width;
     backingHeight = height;
-    scale = shopScale(width, height);
+    scale = nextScale;
     w = width / scale;
     h = height / scale;
     transition = undefined;
@@ -1190,6 +1193,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
   const observer = new ResizeObserver(resize);
   observer.observe(host);
+  visualViewport?.addEventListener('resize', resize);
   keyboard.addEventListener('keydown', onKey);
   reducedMotion.addEventListener('change', motionPreference);
   document.addEventListener('visibilitychange', visitVisibility);
@@ -1201,6 +1205,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     destroy() {
       disposed = true;
       observer.disconnect();
+      visualViewport?.removeEventListener('resize', resize);
       cancelAnimationFrame(frame);
       cancelAnimationFrame(visitFrame);
       clearTimeout(timer);
