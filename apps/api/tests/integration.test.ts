@@ -3,12 +3,13 @@ import { execFile } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
 import { promisify } from 'node:util';
-import { and, eq, like } from 'drizzle-orm';
+import { and, eq, like, sql } from 'drizzle-orm';
 import type { Command } from '@undercut/contracts';
+import type { LegacyState, State } from '@undercut/game-core';
 import { buildApp } from '../src/app.js';
 import { origin, tokenHash } from '../src/auth.js';
 import { db, pool } from '../src/db.js';
-import { invitations, receipts, user, verification } from '../src/schema.js';
+import { campaigns, invitations, receipts, user, verification } from '../src/schema.js';
 
 const app = buildApp();
 await app.ready();
@@ -125,36 +126,45 @@ test('campaigns remain private, persist across sign-ins and apply each valid act
     actionId: randomUUID(),
   }, owner.cookie)).statusCode, 409);
 
-  const buy = { type: 'buy', goodId: 'grain', quantity: 2 };
+  const vendorId = 'meadow-bargain';
+  const { state } = sameAction[0].json<{ state: State }>();
+  const offer = state.vendorOffers[vendorId].find(({ kind, goodId }) => kind === 'regular' && goodId === 'grain');
+  assert.ok(offer);
+  const visit = await request(commandPath, {
+    actionId: randomUUID(), expectedRevision: 1, command: { type: 'visitVendor', vendorId },
+  }, owner.cookie);
+  assert.equal(visit.statusCode, 200, visit.body);
+
+  const buy = { type: 'buy', offerId: offer.id, quantity: 2 };
   const buys = await Promise.all([1, 2].map(() => request(commandPath, {
-    actionId: randomUUID(), expectedRevision: 1, command: buy,
+    actionId: randomUUID(), expectedRevision: 2, command: buy,
   }, owner.cookie)));
   assert.deepEqual(buys.map(({ statusCode }) => statusCode).sort(), [200, 409]);
   let campaign = (await request(campaignPath, undefined, owner.cookie)).json();
-  assert.equal(campaign.state.gold, 94);
-  assert.equal(campaign.revision, 2);
+  assert.equal(campaign.state.gold, 100 - offer.unitCost * buy.quantity);
+  assert.equal(campaign.revision, 3);
   assert.deepEqual((await request(commandPath, destination, owner.cookie)).json(), campaign);
 
   // Receipts created by the previous writer included the full campaign.
   await db.update(receipts).set({ response: sameAction[0].json() }).where(receiptKey);
   assert.deepEqual((await request(commandPath, destination, owner.cookie)).json(), campaign);
 
-  const unaffordable = { actionId: randomUUID(), expectedRevision: 2, command: { ...buy, quantity: 99 } };
-  assert.equal((await request(commandPath, unaffordable, owner.cookie)).statusCode, 422);
+  const overstock = { actionId: randomUUID(), expectedRevision: 3, command: { ...buy, quantity: 99 } };
+  assert.equal((await request(commandPath, overstock, owner.cookie)).statusCode, 422);
   assert.equal((await request(commandPath, {
-    ...unaffordable,
+    ...overstock,
     command: { ...buy, quantity: -4 },
   }, owner.cookie)).statusCode, 400);
   assert.equal((await request(commandPath, {
-    ...unaffordable,
-    command: { ...buy, goodId: '__proto__' },
+    ...overstock,
+    command: { ...buy, offerId: '__proto__' },
   }, owner.cookie)).statusCode, 422);
 
   const shopDay: Command[] = [
-    { type: 'shelf', slot: 0, goodId: 'grain', price: 5 },
+    { type: 'finishBuying' },
+    { type: 'shelf', slot: 0, goodId: 'grain', price: 1 },
     { type: 'open' },
-    ...Array.from({ length: 8 }, () => ({ type: 'serve' } as const)),
-    { type: 'close' },
+    { type: 'serve' },
     { type: 'nextDay' },
     { type: 'chooseTown', townId: 'forge' },
   ];
@@ -188,6 +198,63 @@ test('campaigns remain private, persist across sign-ins and apply each valid act
   assert.equal((await request(campaignPath, undefined, cookie)).json().revision, campaign.revision);
   assert.equal((await request('/api/auth/sign-out', {}, cookie)).statusCode, 200);
   assert.equal((await request('/api/v1/campaigns', undefined, cookie)).statusCode, 401);
+});
+
+test('loading an older campaign upgrades the response and leaves persistence to the next command', async () => {
+  const owner = await register('legacy');
+  const id = randomUUID();
+  const legacy: LegacyState = {
+    rulesVersion: 1,
+    seed: 42,
+    day: 3,
+    phase: 'prepare',
+    townId: 'meadow',
+    gold: 94,
+    inventory: { grain: [{ quantity: 2, unitCost: 3 }] },
+    shelves: [{ goodId: 'grain', price: 5 }, { goodId: null, price: 1 }, { goodId: null, price: 1 }],
+    customers: [],
+    served: 0,
+    revenue: 0,
+    costOfSales: 0,
+    purchases: 6,
+    sold: 0,
+    log: [],
+    history: [],
+  };
+  const name = 'Older campaign';
+  const revision = 9;
+  const [stored] = await db.insert(campaigns).values({
+    id, userId: owner.userId, name, revision, state: sql`${JSON.stringify(legacy)}::jsonb`,
+  }).returning();
+
+  const list = await request('/api/v1/campaigns', undefined, owner.cookie);
+  assert.equal(list.statusCode, 200, list.body);
+  assert.deepEqual(list.json(), [{ id, name, revision, updatedAt: stored.updatedAt.toISOString() }]);
+
+  const campaignPath = `/api/v1/campaigns/${id}`;
+  const detail = await request(campaignPath, undefined, owner.cookie);
+  assert.equal(detail.statusCode, 200, detail.body);
+  const campaign = detail.json<{ revision: number; state: State }>();
+  assert.equal(campaign.revision, revision);
+  assert.equal(campaign.state.rulesVersion, 1);
+  assert.equal(campaign.state.phase, 'prepare');
+  assert.equal(campaign.state.marketDay, legacy.day);
+  assert.ok(campaign.state.vendorOffers['meadow-bargain'].length > 0);
+  assert.deepEqual(campaign.state.inventory, legacy.inventory);
+  assert.deepEqual(campaign.state.shelves, [...legacy.shelves, { goodId: null, price: 1 }]);
+  const [afterRead] = await db.select().from(campaigns).where(eq(campaigns.id, id));
+  assert.deepEqual(afterRead, stored);
+
+  const response = await request(`${campaignPath}/commands`, {
+    actionId: randomUUID(), expectedRevision: revision, command: { type: 'finishBuying' },
+  }, owner.cookie);
+  assert.equal(response.statusCode, 200, response.body);
+  const updated = response.json<{ revision: number; state: State }>();
+  assert.equal(updated.revision, revision + 1);
+  assert.deepEqual(updated.state, { ...campaign.state, buyingComplete: true });
+  const [afterCommand] = await db.select().from(campaigns).where(eq(campaigns.id, id));
+  assert.equal(afterCommand.revision, updated.revision);
+  assert.deepEqual(afterCommand.state, updated.state);
 });
 
 async function operatorResetToken(email: string) {
