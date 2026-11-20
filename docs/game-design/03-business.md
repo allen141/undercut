@@ -17,7 +17,7 @@ The offer is below the listed shelf price. Show the good, listed price, and offe
 ## Core UI and feedback
 
 - Keep the door, displays, and counter visible as shoppers arrive and leave. Show customer progress out of eight, latest outcome, remaining stock, and running receipts.
-- Present each automatic visit for about 1.7 seconds, including the final result before closing. Show the requested item as the visitor arrives, then show the sale or the reason the visitor left. Keep the last outcome readable as the next visitor arrives.
+- Present each automatic visit for five seconds by default. Show the requested item as the visitor arrives and give them time to consider it. Click or tap the visitor, or activate their keyboard control, to reveal their decision early. Give the result and any sale animation their full time, including for the last visitor before closing.
 - On a sale, show the purchased item and the gold received, and update visible cash, receipts, and stock together when the result appears. Move the item from the display to the visitor and the payment toward the counter. Reduced motion keeps the same pacing and uses a stationary visitor, item, and gold amount.
 - Open the business book to the offer when a customer needs a decision. Keep the choices available until the player responds, then resume automatic visits. The book also gives access to the day's activity and distinguishes ordinary purchases, negotiated sales, and missed sales.
 - Use clear outcomes for goods that were never displayed, stocked goods that sold out, and customers who walked away from a price. A sale deducts one unit, adds the actual payment to gold and revenue, and records that unit's first-in, first-out cost.

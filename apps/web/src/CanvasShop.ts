@@ -14,11 +14,12 @@ type Rect = Bounds;
 type Action = { id: string; label: string; box: Rect; run: () => void; disabled?: boolean; active?: boolean };
 type Panel = 'book' | 'shelf' | 'price' | 'stock';
 type Page = 'summary' | 'vendors' | 'activity' | 'stock';
-type Playback = { index: number; until: number; start: number; revealed: boolean; negotiated: boolean };
+type Playback = { index: number; until: number; start: number; revealAfter: number; revealed: boolean; negotiated: boolean };
 export type ShopController = { update(): void; destroy(): void };
 
-const visitDuration = 1700;
-const visitReveal = 480;
+const visitDuration = 5000;
+const visitReveal = 3780;
+const visitExitDuration = 340;
 const cream = 0xffe7bb;
 const muted = 0xdebb98;
 const gold = 0xf0bd73;
@@ -101,6 +102,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   let artKey = '';
   let visitorKey = '';
   visitArt.addChild(visitor, reward);
+  visitor.on('pointertap', hurryVisitor);
   app.stage.addChild(art, visitArt, scene, motion);
 
   function box(layer: Container, b: Rect, fill: number, border?: number, alpha = 1, radius = 7) {
@@ -244,6 +246,9 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     reward.clear();
     const state = props().campaign.state;
     const index = playback?.index ?? state.pendingNegotiation?.customerIndex;
+    const canHurry = playback && !playback.revealed && panel === null;
+    visitor.eventMode = canHurry ? 'static' : 'none';
+    visitor.cursor = canHurry ? 'pointer' : 'default';
     if (index === undefined) {
       visitor.visible = false;
       return;
@@ -254,6 +259,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     if (key !== visitorKey) {
       visitor.clear();
       drawCustomer(visitor, body, state.seed, index);
+      visitor.hitArea = new Rectangle(body.x, body.y, body.w, body.h * 1.08);
       visitorKey = key;
     }
     visitor.visible = true;
@@ -264,10 +270,11 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
     const elapsed = Math.max(0, now - start);
     const arrival = playback?.negotiated ? 1 : Math.min(1, elapsed / 420);
-    const exit = playback ? Math.max(0, Math.min(1, (elapsed - 1360) / 340)) : 0;
+    const exit = playback ? Math.max(0, Math.min(1, 1 - (visitDuration - elapsed) / visitExitDuration)) : 0;
     const doorway = layout.door.x + layout.door.w * .77 - (body.x + body.w / 2);
     const step = Math.max((1 - arrival) ** 2, exit ** 2);
-    visitor.position.set(doorway * step, -Math.sin(step * Math.PI * 2) * 4);
+    const thinking = playback && !playback.revealed && arrival === 1 ? Math.sin(elapsed / 210) * 2 : 0;
+    visitor.position.set(doorway * step, -Math.sin(step * Math.PI * 2) * 4 + thinking);
     visitor.alpha = Math.min(1, .28 + arrival * 3, 1 - exit ** 2);
 
     if (!playback?.revealed) return;
@@ -446,6 +453,10 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     }
 
     const focusOutcome = activeResult ?? (phase === 'report' ? latestOutcome : undefined);
+    if (playback && !playback.revealed && !modal) {
+      const body = layout.visitor;
+      control(scene, 'hurry-visitor', 'Hurry this visitor', rect(body.x, body.y, body.w, body.h * 1.08), hurryVisitor, { hide: true });
+    }
     if (playback || focusOutcome) {
       const cardW = Math.min(narrow ? 298 : 370, w - 2 * margin - 12);
       const cardX = Math.max(margin + 6, Math.min(w - cardW - margin - 6, layout.visitor.x - cardW * .35));
@@ -456,7 +467,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       box(scene, rect(cardX, cardY, cardW, 103), sale ? 0x382a2d : ink, cardAccent, .97, 10);
       box(scene, rect(cardX + 1, cardY + 15, 4, 73), cardAccent, undefined, 1, 2);
       text(scene, `Customer ${index + 1} of ${CUSTOMERS_PER_DAY}`, cardX + 14, cardY + 17, { size: 12, color: cardAccent });
-      const detail = focusOutcome ? `${focusOutcome.good} · ${focusOutcome.detail}` : 'The visitor checks your displays.';
+      const detail = focusOutcome ? `${focusOutcome.good} · ${focusOutcome.detail}` : 'Considering… Tap or click the visitor to hurry.';
       text(scene, focusOutcome?.title ?? requestText, cardX + 14, cardY + 45,
         { size: narrow ? 21 : 24, serif: true, max: cardW - (sale ? 121 : 28) });
       text(scene, detail, cardX + 14, cardY + 79, { size: narrow ? 13 : 14, max: cardW - (sale ? 115 : 28) });
@@ -911,17 +922,25 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
   function startVisit(index: number, until: number, negotiated: boolean) {
     offerArrival = undefined;
-    playback = { index, until, start: performance.now(), revealed: false, negotiated };
-    visitPausedAt = document.hidden ? playback.start : undefined;
+    playback = { index, until, start: performance.now(), revealAfter: visitReveal, revealed: false, negotiated };
     render();
+    // Count the visit from the first rendered frame, even when drawing the room takes time.
+    playback.start = performance.now();
+    visitPausedAt = document.hidden ? playback.start : undefined;
     scheduleVisit();
   }
 
   function scheduleVisit() {
     clearTimeout(animationClock);
     if (!playback || document.hidden) return;
-    const deadline = playback.revealed ? visitDuration : visitReveal;
+    const deadline = playback.revealed ? visitDuration : playback.revealAfter;
     animationClock = setTimeout(advanceVisit, Math.max(0, playback.start + deadline - performance.now()));
+  }
+
+  function hurryVisitor() {
+    if (!playback || playback.revealed || panel !== null || document.hidden) return;
+    playback.revealAfter = Math.min(playback.revealAfter, performance.now() - playback.start + 120);
+    scheduleVisit();
   }
 
   function advanceVisit() {
@@ -931,6 +950,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       playback.start = performance.now() - visitReveal;
       playback.revealed = true;
       render();
+      playback.start = performance.now() - visitReveal;
       scheduleVisit();
       return;
     }

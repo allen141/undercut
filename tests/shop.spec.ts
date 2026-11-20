@@ -187,10 +187,16 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
   let timeline = reloadAtOffer ? await watchVisitorOutcomes(page) : undefined;
   await activate(page, 'Open the shop');
   await expect(action(page, 'Serve customer')).toHaveCount(0);
+  if (reloadAtOffer) {
+    await expect(page.locator('[data-canvas-status]')).toContainText(/^Customer 2 of 8\. Looking for/);
+    await activate(page, 'Hurry this visitor');
+    await expect(page.locator('[data-canvas-status]')).toContainText(/^Customer 2 of 8\..*(?:Sale made|No sale)/);
+    await expect(action(page, 'Hurry this visitor')).toHaveCount(0);
+  }
   let negotiations = 0;
   for (;;) {
     await expect.poll(async () => await closing.count() === 1 || await accept.count() === 1 && await accept.isEnabled(),
-      { timeout: 25_000 }).toBe(true);
+      { timeout: 50_000 }).toBe(true);
     if (await closing.count()) break;
     negotiations++;
     expect(negotiations).toBeLessThanOrEqual(2);
@@ -198,11 +204,15 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
       const saved = await campaignSnapshot(page);
       expect(saved.state.pendingNegotiation).not.toBeNull();
       const events = await timeline!.jsonValue();
+      const firstArrival = events.find(event => event.visits === 0 && event.text.startsWith('Customer 1 of 8.'));
       const first = events.find(event => event.visits === 1 && event.text.startsWith('Customer 1 of 8.'));
+      const secondArrival = events.find(event => event.visits === 1 && event.text.startsWith('Customer 2 of 8.'));
       const second = events.find(event => event.visits === 2 && event.text.startsWith('Customer 2 of 8.'));
       expect(first?.text).toMatch(/(?:Sale made|No sale)/);
       expect(second?.text).toMatch(/(?:Sale made|No sale)/);
-      expect(second!.at - first!.at).toBeGreaterThanOrEqual(1400);
+      expect(first!.at - firstArrival!.at).toBeGreaterThanOrEqual(3500);
+      expect(secondArrival!.at - firstArrival!.at).toBeGreaterThanOrEqual(4800);
+      expect(second!.at - secondArrival!.at).toBeLessThan(3000);
       await page.reload();
       await page.getByRole('button', { name: new RegExp(reloadAtOffer) }).click();
       await expectRevision(page, saved.revision);
@@ -211,6 +221,7 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
       timeline = await watchVisitorOutcomes(page);
     }
     await activate(page, 'Accept offer');
+    await expect(accept).toHaveCount(0);
   }
   if (reloadAtOffer) expect(negotiations).toBeGreaterThan(0);
   const { state, revision } = await campaignSnapshot(page);
@@ -379,6 +390,7 @@ test('fits and accepts touch within a zoomed Android viewport', async ({ page, a
 
 test('keeps two campaigns independent across two days, reconnects, and accepts a reset link', async ({ browser, context, page, account, baseURL }, info) => {
   test.skip(info.project.name !== 'desktop-chromium', 'The connection and concurrency checks run in desktop Chromium.');
+  test.setTimeout(220_000);
   // Two full days, reconnect, a second tab and password reset run through software WebGL on CI.
   test.setTimeout(300_000);
   const errors = captureErrors(page);
