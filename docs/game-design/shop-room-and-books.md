@@ -2,7 +2,7 @@
 
 ## Persistent room
 
-The active campaign uses the full viewport for a single Pixi scene. The magical archway holds the shop's one changing town view, with a destination dial beside it. Three floor displays and the window display show the current stock. The counter, bell, and ledger sit in the foreground, with the customer behind the counter during a visit.
+The active campaign uses the full viewport for a single Pixi scene. The magical archway holds the shop's changing town view. The destination dial crowns the arch and enlarges beside the door during destination selection. Activate a town symbol to preview the town in the portal and the Route Atlas, then activate the dial's center to travel. Three floor displays and the window display show the current stock. The counter, bell, and ledger sit in the foreground, with the customer behind the counter during a visit.
 
 The scene builds depth through its draw order. The illustrated timber wall and floor share a horizon with the arch and shelves. The scenery layer clips Meadow, Forge, and Harbor to the portal opening and draws the portal frame, warm lantern glow, and shelves in front. The visitor and their arrival and departure movement sit above the shelves. The counter and props render above the visitor, followed by sale effects, book pages, and controls. Portrait uses compact floor displays below the portal. Wide layouts set the displays on either side and set the counter farther forward.
 
@@ -10,7 +10,7 @@ The runtime WebP textures in `apps/web/public/shop-art/` are selected from the u
 
 ## Books on the desk
 
-Each phase has a physical book the player can open from the desk. The destination book holds town comparison, the wholesale book holds vendor comparison and purchases followed by shop setup, the business book holds activity and negotiations, and the closing ledger holds results. Clearly indicate which book is available in the current phase. Changing phases updates the book’s live nameplate.
+Each phase has a physical book the player can open from the desk. The Route Atlas shows the previewed town's specialty and compares local wholesale price trends against a global average for each good alongside local demand, budget, and held stock. The dial remains usable while the atlas is open. The wholesale book holds vendor comparison and purchases followed by shop setup, the business book holds activity and negotiations, and the closing ledger holds results. Clearly indicate which book is available in the current phase. Changing phases updates the book’s live nameplate.
 
 Animate the book opening from the desk into reading position and animate page turns within it. Reserve the whole portal for the town scene during both reading and transitions. On phones in portrait, stretch the parchment across the screen below the window and down to the bottom edge, including when the browser fits a desktop-sized viewport to the display. On wider screens, dock the page to the left of the window. Keep the text and controls at a readable size and paginate dense lists inside the book. An unresolved negotiation opens directly to the offer, then returns to the room when the outcome is recorded.
 

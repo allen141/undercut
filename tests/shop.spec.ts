@@ -101,16 +101,18 @@ async function expectStock(page: Page, good: string, amount: number) {
 }
 
 async function chooseTown(page: Page, name: string, keyboard = false) {
+  const preview = 'Preview ' + name;
+  const confirm = 'Choose ' + name;
   if (keyboard) {
-    const dial = action(page, 'Turn the door dial');
-    await dial.focus();
-    await expect(dial).toBeFocused();
+    await action(page, preview).focus();
+    await page.keyboard.press('Enter');
+    await expect(action(page, preview)).toHaveAttribute('aria-pressed', 'true');
+    await action(page, confirm).focus();
     await page.keyboard.press('Enter');
   } else {
-    await activate(page, 'Turn the door dial');
+    await activate(page, preview);
+    await activate(page, confirm);
   }
-  await activate(page, 'Preview ' + name);
-  await activate(page, 'Choose ' + name);
 }
 
 async function checkTownJournal(page: Page, name: string, issue: string, picture: string, day: number) {
@@ -304,15 +306,34 @@ async function screenshot(page: Page, path: string) {
   await page.screenshot({ path, animations: 'disabled' });
 }
 
-test('opens the shop and saves a town choice on Android', { tag: '@smoke' }, async ({ page, account }, info) => {
-  test.skip(info.project.name !== 'mobile-chromium', 'The smoke journey uses Android Chromium.');
+test('previews towns on the dial and confirms the destination', { tag: '@smoke' }, async ({ page, account }, info) => {
+  test.skip(!['mobile-chromium', 'desktop-chromium'].includes(info.project.name), 'The focused dial journey uses Chromium.');
   test.setTimeout(30_000);
   await invite(page, account);
   await createCampaign(page, 'Preview Smoke Shop');
+  const commands: CommandRequest['command'][] = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && request.url().endsWith('/commands')) {
+      commands.push((request.postDataJSON() as CommandRequest).command);
+    }
+  });
   await expect(shopCanvas(page)).toHaveAttribute('data-renderer', 'webgl');
   await expectNoOverflow(page);
-  await chooseTown(page, 'Harbor');
+  await expect(action(page, 'Preview Meadow')).toHaveAttribute('aria-pressed', 'true');
+  await activate(page, 'Open destination book');
+  const atlas = page.getByRole('region', { name: 'Route Atlas' });
+  await expect(atlas).toContainText('Meadow · Grain & herbs');
+  await expect(atlas.getByText(/Global average \d/)).toHaveCount(6);
+  await expect(atlas).toContainText('Crystal. Day 1, unavailable.');
+  await activate(page, 'Preview Forge');
+  await expect(atlas).toContainText('Forge · Iron & crystal');
+  await expect(action(page, 'Preview Forge')).toHaveAttribute('aria-pressed', 'true');
+  await expectRevision(page, 0);
+  expect(commands).toEqual([]);
+  await chooseTown(page, 'Harbor', info.project.name === 'desktop-chromium');
   await expectRevision(page, 1);
+  expect(commands).toEqual([{ type: 'chooseTown', townId: 'harbor' }]);
+  await expect(action(page, 'Preview Harbor')).toHaveCount(0);
   await expect(action(page, 'Open wholesale book')).toBeEnabled();
   const { state } = await campaignSnapshot(page);
   expect(state.townId).toBe('harbor');
@@ -349,7 +370,7 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await activate(page, 'Begin day 2');
   await expectRevision(page, closingRevision + 1);
   if (info.project.name === 'mobile-chromium') {
-    const dial = action(page, 'Turn the door dial');
+    const dial = action(page, 'Preview Meadow');
     const portraitDial = await dial.boundingBox();
     await page.setViewportSize({ width: 740, height: 390 });
     await expect.poll(() => shopCanvas(page).boundingBox()).toMatchObject({ width: 740, height: 390 });

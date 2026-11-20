@@ -57,17 +57,35 @@ function drawPortal(layer: Container, art: ShopTextures, bay: Bounds, townId: st
     vista.addChild(voidArt);
   }
   vista.mask = opening;
-  layer.addChild(glow(wx(.47), wy(.54), Math.min(w, h) * .55, 0xac60ef), vista, opening, placeSprite(art['portal-frame'], bay));
+  // Keep the illustrated brass trim and use its inset as the dial's socket.
+  const socket = new Graphics().moveTo(wx(.453), wy(.045))
+    .quadraticCurveTo(wx(.502), wy(.055), wx(.546), wy(.088))
+    .lineTo(wx(.517), wy(.161)).quadraticCurveTo(wx(.487), wy(.19), wx(.452), wy(.207))
+    .quadraticCurveTo(wx(.416), wy(.19), wx(.388), wy(.161)).lineTo(wx(.362), wy(.088))
+    .quadraticCurveTo(wx(.405), wy(.055), wx(.453), wy(.045)).closePath().fill(0x3d2b4c)
+    .stroke({ color: 0x6f4a60, width: Math.max(1, h * .009) });
+  const socketRadius = Math.min(w, h) * .039;
+  socket.circle(wx(.453), wy(.119), socketRadius).fill(0x22192c)
+    .stroke({ color: 0x976b60, width: Math.max(1, h * .005) });
+  layer.addChild(glow(wx(.47), wy(.54), Math.min(w, h) * .55, 0xac60ef), vista, opening,
+    placeSprite(art['portal-frame'], bay), socket);
 }
 
-function drawDial(layer: Container, art: ShopTextures, dial: Bounds, town: string | null) {
+export function dialTargets(dial: Bounds) {
+  const size = Math.max(24, dial.w * .21);
+  const target = (x: number, y: number): Bounds => ({ x: dial.x + dial.w * x - size / 2,
+    y: dial.y + dial.h * y - size / 2, w: size, h: size });
+  return { towns: { meadow: target(.49, .28), forge: target(.28, .54), harbor: target(.696, .54) },
+    confirm: target(.49, .475) };
+}
+
+export function drawDial(layer: Container, art: ShopTextures, dial: Bounds, town: string | null, expanded = false) {
   layer.addChild(fitSprite(art['portal-dial'], dial));
-  const index = TOWNS.findIndex(destination => destination.id === town);
-  if (index < 0) return;
-  const position = [[.494, .24], [.26, .51], [.71, .51]][index];
-  const x = dial.x + dial.w * position[0], y = dial.y + dial.h * position[1];
-  layer.addChild(new Graphics().circle(x, y, Math.max(6, dial.w * .107))
-    .stroke({ color: 0xffe2a6, width: 1.6, alpha: .9 }));
+  const destination = TOWNS.find(destination => destination.id === town);
+  if (!destination || !expanded) return;
+  const { x, y, w, h } = dialTargets(dial).towns[destination.id];
+  layer.addChild(new Graphics().circle(x + w / 2, y + h / 2, dial.w * .125)
+    .stroke({ color: 0xffe2a6, width: 2, alpha: .9 }));
 }
 
 export function setGood(sprite: Sprite, art: ShopTextures, id: GoodId, x: number, y: number, size: number) {
@@ -123,7 +141,7 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
   drawRoomBackground(layer, art, width, height, horizon, portrait);
   const townId = options.townId ?? state.townId;
   drawPortal(layer, art, bay, townId);
-  drawDial(layer, art, dial, townId);
+  if (state.phase !== 'travel') drawDial(layer, art, dial, townId);
 
   const lantern = { x: Math.max(10, bay.x - 49), y: bay.y + 38, w: 39, h: 59 };
   layer.addChild(glow(lantern.x + lantern.w / 2, lantern.y + lantern.h * .6, 64, 0xffbb62),

@@ -6,7 +6,7 @@ import {
   inventoryValue, priceRange, quantity, reputationFor, vendorOffersForTown, vendorsInTown, type CustomerResult, type GoodId,
 } from '@undercut/game-core';
 import type { BusinessPresentation, GameProps } from './Game.js';
-import { customerPortrait, drawRoom, phaseBooks, setCoin, setGood } from './ShopArt.js';
+import { customerPortrait, dialTargets, drawDial, drawRoom, phaseBooks, setCoin, setGood } from './ShopArt.js';
 import { loadShopTextures, placeSprite, skin } from './ShopAssets.js';
 import { roomLayout, shopScale, type Bounds } from './ShopLayout.js';
 
@@ -28,9 +28,13 @@ const gold = 0xf0bd73;
 const ink = 0x281f2a;
 const paperInk = 0x38262e;
 const paperMuted = 0x614941;
+const localTrend = 0x315965;
+const globalTrend = 0x94674f;
 const journalTheme = { cover: 0x632e44, edge: 0xc18a58, page: 0xf5dfbb };
 const journalGoods = { meadow: 'grain', forge: 'iron', harbor: 'cloth' } as const;
 const money = (n: number) => `${n}g`;
+const quotedPrice = (n: number) => money(Math.round(n * 10) / 10);
+const average = (values: number[]) => values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
 const nameOf = (id: GoodId) => GOODS.find(item => item.id === id)!.name;
 const rect = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w, h });
 const displayName = (slot: number) => slot === WINDOW_SLOT_INDEX ? 'Window display' : `Floor display ${slot + 1}`;
@@ -74,7 +78,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   let page: Page = 'summary';
   let pageIndex = 0;
   let journalArticle: number | null = null;
-  let selectedTown = -1;
+  let selectedTown = 0;
   let selectedShelf = 0;
   let draftGood: GoodId | null = null;
   let draftPrice = 1;
@@ -421,7 +425,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       layer.addChild(item);
     }
 
-    const townId = phase === 'travel' ? preview?.id : undefined;
+    const townId = phase === 'travel' ? preview.id : undefined;
     const artShelf = panel === 'shelf' || panel === 'price' ? selectedShelf : undefined;
     const displayState = state.shelves.map(shelf => [shelf.goodId, shelf.goodId ? Math.min(5, visibleStock(shelf.goodId)) : 0]);
     const key = JSON.stringify([w, h, phase, townId ?? state.townId, artShelf, displayState]);
@@ -438,7 +442,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       { copy: narrow ? '‹ Menu' : '‹ All campaigns', disabled: p.busy || !p.online });
     control(scene, 'stock', 'Inventory and gold', rect(w - margin - (narrow ? 67 : 114), 12, narrow ? 64 : 111, 44),
       () => show('stock', 'stock'), { copy: money(cash) });
-    text(scene, narrow ? `Day ${state.day} · ${town?.name ?? 'Travel'}` : `${p.campaign.name.slice(0, 36)}  /  Day ${state.day} · ${town?.name ?? 'Between towns'}`,
+    const location = phase === 'travel' ? `${preview.name} preview` : town?.name ?? 'Between towns';
+    text(scene, narrow ? `Day ${state.day} · ${location}` : `${p.campaign.name.slice(0, 36)}  /  Day ${state.day} · ${location}`,
       w / 2, 34, { align: 'center', max: w - (narrow ? 155 : 308), serif: !narrow, size: narrow ? 13 : 17 });
 
     function openBook() {
@@ -463,11 +468,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       text(scene, phaseBooks[phase].title, x + width / 2, y + height - 10,
         { serif: true, size: narrow ? 13 : 16, align: 'center', max: width - 12 });
     }
-    if (phase === 'travel') {
-      control(scene, 'dial', 'Turn the door dial', layout.dial, openBook, { hide: true });
-      text(scene, 'Turn dial', layout.dial.x + layout.dial.w / 2, layout.dial.y + layout.dial.h + 9,
-        { align: 'center', size: 12, max: 70 });
-    }
+    if (phase === 'travel' && panel && panel !== 'book') drawDial(scene, textures, layout.travelDial, preview.id, true);
     if (phase === 'prepare' && state.buyingComplete || phase === 'open') {
       layout.shelves.forEach((bounds, slot) => {
         const shelf = state.shelves[slot];
@@ -530,7 +531,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
     const tip = !p.online ? 'You’re offline. Reconnect to continue trading.' : p.error || (
       p.busy ? 'Saving…' : p.pending ? 'Confirm your last action.' :
-      phase === 'travel' ? 'Turn the door dial or open the atlas to choose a town.' :
+      phase === 'travel' ? 'Pick a town on the dial. Press its center to travel.' :
       phase === 'prepare' ? state.buyingComplete ? 'Set up your displays and open the shop.' : 'Open the supplier ledger to compare vendors.' :
       phase === 'open' ? latestOutcome?.line ?? state.log[served - 1] ?? 'The shop is open. Customers are on their way.' :
       'The shop is closed. Review your accounts when ready.');
@@ -683,36 +684,65 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       }
       if (panel === 'book' && phase === 'travel') {
         title('Route Atlas');
-        const cell = (inner - 12) / 3;
-        TOWNS.forEach((destination, i) => button(`preview-${destination.id}`, `Preview ${destination.name}`,
-          i * (cell + 6), 56, cell, () => {
-            selectedTown = i;
-            animate('turn');
-            render();
-          }, { copy: destination.name, active: i === selectedTown }));
-        const destination = preview ?? TOWNS[0];
-        const rates = Object.entries(vendorOffersForTown(state, destination.id)).flatMap(([vendorId, offers]) =>
-          offers.filter(offer => reputationFor(state, vendorId).tier >= (offer.requiredTier ?? 0)));
-        note(`${destination.specialty} · ${money(state.gold)} available`, 115);
-        rule(129);
-        const columns = [0, inner * .39, inner * .59, inner * .80, inner - 2];
-        ['Good', 'Buy', 'Demand', 'Budget', 'Held'].forEach((label, i) =>
-          words(label, columns[i], 144, { align: i === 0 ? 'left' : i === 4 ? 'right' : 'center', color: paperMuted, size: 11 }));
+        const days = Array.from({ length: Math.min(state.day, 5) }, (_, i) => Math.max(1, state.day - 4) + i);
+        const markets = TOWNS.map(town => days.map(day => Object.values(vendorOffersForTown({
+          seed: state.seed, day, vendorReputation: {},
+        }, town.id)).flat().filter(offer => offer.kind === 'regular')));
+        const allOffers = markets.flat(2);
+        note(`${preview.name} · ${preview.specialty} · ${money(state.gold)} available`, 66);
+        rule(82);
+        const columns = [0, inner * .355, inner * .596, inner * .80, inner];
+        ['Good', 'Price trend', 'Demand', 'Budget', 'Held'].forEach((label, i) =>
+          text(overlay, label, left + columns[i], y + 100,
+            { align: i === 0 ? 'left' : i === 4 ? 'right' : 'center', color: paperMuted, size: 11 }));
         GOODS.forEach((good, i) => {
-          const prices = rates.filter(offer => offer.goodId === good.id).map(offer => offer.unitCost);
-          const low = Math.min(...prices), high = Math.max(...prices);
-          const supply = !prices.length ? '—' : low === high ? money(low) : `${low}–${high}g`;
-          const range = priceRange(destination, good.id);
-          const demand = destination.demand[good.id];
-          const row = [good.name, supply,
-            demand >= 1.2 ? 'High' : demand <= .9 ? 'Low' : 'Mid', `${range.min}–${range.max}g`, String(quantity(state, good.id))];
-          row.forEach((value, j) => words(value, columns[j], 170 + i * 25, {
-            size: 12, align: j === 0 ? 'left' : j === 4 ? 'right' : 'center',
-          }));
+          const prices = (offers: typeof allOffers) => offers.filter(offer => offer.goodId === good.id).map(offer => offer.unitCost);
+          const localPrices = markets[selectedTown].map(offers => average(prices(offers)));
+          const benchmark = average(prices(allOffers));
+          const current = localPrices.at(-1) ?? null;
+          const rowY = 127 + i * 34;
+          const plot = rect(left + inner * .205, y + rowY - 9, inner * .205, 18);
+          const samples = [...localPrices, benchmark].filter(price => price !== null);
+          const min = Math.min(...samples) - .5;
+          const max = Math.max(...samples) + .5;
+          const chart = new Graphics();
+          const heightAt = (price: number) => plot.y + plot.h * (max - price) / (max - min);
+          if (benchmark !== null) {
+            const baseline = heightAt(benchmark);
+            for (let dx = 0; dx < plot.w; dx += 7) {
+              chart.moveTo(plot.x + dx, baseline).lineTo(plot.x + Math.min(dx + 4, plot.w), baseline);
+            }
+            chart.stroke({ color: globalTrend, width: 1.5 });
+          }
+          let previous: { x: number; y: number } | undefined;
+          localPrices.forEach((price, index) => {
+            if (price === null) {
+              previous = undefined;
+              return;
+            }
+            const point = { x: plot.x + plot.w * (days.length === 1 ? .5 : index / (days.length - 1)), y: heightAt(price) };
+            if (previous) chart.moveTo(previous.x, previous.y).lineTo(point.x, point.y).stroke({ color: localTrend, width: 1.8 });
+            chart.circle(point.x, point.y, 2.1).fill(localTrend);
+            previous = point;
+          });
+          overlay.addChild(chart);
+          const range = priceRange(preview, good.id);
+          const demandValue = preview.demand[good.id];
+          const demand = demandValue >= 1.2 ? 'High' : demandValue <= .9 ? 'Low' : 'Mid';
+          const budget = `${range.min}–${range.max}g`;
+          const held = quantity(state, good.id);
+          [good.name, current === null ? '—' : quotedPrice(current), demand, budget, String(held)].forEach((value, j) =>
+            text(overlay, value, left + (j === 1 ? inner * .524 : columns[j]), y + rowY,
+              { color: paperInk, size: 12, align: j === 0 ? 'left' : j === 1 || j === 4 ? 'right' : 'center' }));
+          const history = localPrices.map((price, index) => `Day ${days[index]}, ${price === null ? 'unavailable' : quotedPrice(price)}`).join('. ');
+          readingLines.push(`${good.name}. ${history}. Global average ${benchmark === null ? 'unavailable' : quotedPrice(benchmark)}. ` +
+            `Demand ${demand.toLowerCase()}, budget ${budget}, held ${held}.`);
         });
-        note('— indicates no local supply', 316);
-        primary('choose-town', `Choose ${destination.name}`, () => p.send({ type: 'chooseTown', townId: destination.id }),
-          { disabled: blocked || !preview });
+        rule(319);
+        const period = days.length === 1 ? `Day ${days[0]}` : `Days ${days[0]}–${days.at(-1)}`;
+        note(`${period} · Solid town avg · Dashed global avg`, 335);
+        note('— No local regular price', 353);
+        note('Pick a town on the dial. Press its center to travel.', 376);
       }
 
       if (panel === 'book' && phase === 'prepare' && !state.buyingComplete) {
@@ -987,6 +1017,19 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       }
     }
 
+    if (phase === 'travel' && (!panel || panel === 'book')) {
+      const dialLayer = new Container();
+      scene.addChild(dialLayer);
+      drawDial(dialLayer, textures, layout.travelDial, preview.id, true);
+      const targets = dialTargets(layout.travelDial);
+      TOWNS.forEach((town, i) => control(dialLayer, `preview-${town.id}`, `Preview ${town.name}`, targets.towns[town.id], () => {
+        selectedTown = i;
+        render();
+      }, { hide: true, active: i === selectedTown }));
+      control(dialLayer, 'choose-town', `Choose ${preview.name}`, targets.confirm,
+        () => p.send({ type: 'chooseTown', townId: preview.id }), { hide: true, disabled: blocked });
+    }
+
     keyboard.setAttribute('aria-label', modal ? `${readingTitle} controls` : 'Shop controls');
     sync(actions);
     reading.hidden = !modal;
@@ -1126,11 +1169,11 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       } else if (current.pendingNegotiation || prior.phase === 'open' && current.phase === 'report') {
         renderOutcome = true;
       } else if (current.phase !== prior.phase) {
-        focus(current.phase === 'travel' ? 'dial' : 'book');
+        focus(current.phase === 'travel' ? 'preview-meadow' : 'book');
         panel = null;
         viewedVendor = '';
         selectedOffer = '';
-        selectedTown = -1;
+        selectedTown = 0;
         page = 'summary';
         pageIndex = 0;
         transition = undefined;

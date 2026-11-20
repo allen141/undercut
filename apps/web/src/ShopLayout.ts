@@ -23,9 +23,10 @@ export function roomLayout(width: number, height: number) {
   const bayX = portrait ? width * .17 : Math.max(width * .32, 380);
   const bayW = portrait ? width * .80 : Math.min(width * .55, width * .97 - bayX);
   const bay = { x: bayX, y: bayY, w: bayW, h: horizon - bayY - (portrait ? 8 : 0) };
-  const dialSize = Math.max(48, Math.min(width * .14, 86));
-  const dial = { x: Math.max(10, bay.x - dialSize * .72), y: bay.y + bay.h * .54, w: dialSize, h: dialSize };
   const door = { x: bay.x + bay.w * .228, y: bay.y + bay.h * .245, w: bay.w * .48, h: bay.h * .735 };
+  const dialSize = Math.max(34, Math.min(132, bay.w * .25, bay.h * .36));
+  const dial = { x: bay.x + bay.w * .46 - dialSize / 2, y: bay.y + bay.h * .11 - dialSize / 2,
+    w: dialSize, h: dialSize };
   const shelfW = Math.min(width * (narrow ? .25 : .19), height * .29);
   const shelfH = portrait ? 46 : Math.min(105, height * .14);
   // Keep the center aisle open from the portal to the counter at either aspect ratio.
@@ -55,5 +56,11 @@ export function roomLayout(width: number, height: number) {
     ? { x: 0, y: bookTop, w: width, h: height - bookTop }
     : { x: Math.max(15, bay.x - 590), y: Math.max(70, (height - deskPageHeight) / 2),
       w: Math.min(570, bay.x - 35), h: deskPageHeight };
-  return { portrait, door, dial, bay, shelves, counter, bell, book, visitor, horizon, page };
+  const travelDialLeft = portrait ? 8 : page.x + page.w + 8;
+  const travelDialSize = Math.max(88, Math.min(200, door.x - travelDialLeft - 8,
+    portrait ? page.y - 63 : height * .35));
+  const travelDial = { x: Math.max(travelDialLeft, door.x - travelDialSize - 8),
+    y: portrait ? Math.max(59, door.y + door.h / 2 - travelDialSize / 2)
+      : Math.max(68, door.y + door.h * .25 - travelDialSize / 2), w: travelDialSize, h: travelDialSize };
+  return { portrait, door, dial, travelDial, bay, shelves, counter, bell, book, visitor, horizon, page };
 }
