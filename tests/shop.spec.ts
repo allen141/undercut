@@ -304,6 +304,21 @@ async function screenshot(page: Page, path: string) {
   await page.screenshot({ path, animations: 'disabled' });
 }
 
+test('opens the shop and saves a town choice on Android', { tag: '@smoke' }, async ({ page, account }, info) => {
+  test.skip(info.project.name !== 'mobile-chromium', 'The smoke journey uses Android Chromium.');
+  test.setTimeout(30_000);
+  await invite(page, account);
+  await createCampaign(page, 'Preview Smoke Shop');
+  await expect(shopCanvas(page)).toHaveAttribute('data-renderer', 'webgl');
+  await expectNoOverflow(page);
+  await chooseTown(page, 'Harbor');
+  await expectRevision(page, 1);
+  await expect(action(page, 'Open wholesale book')).toBeEnabled();
+  const { state } = await campaignSnapshot(page);
+  expect(state.townId).toBe('harbor');
+  expect(state.phase).toBe('prepare');
+});
+
 test('trades a full day and returns with its ledger and remaining stock', async ({ page, account }, info) => {
   test.skip(info.project.name === 'desktop-chromium', 'The desktop Chromium journey covers this flow over two days.');
   if (info.project.name === 'desktop-firefox') await page.emulateMedia({ reducedMotion: 'no-preference' });

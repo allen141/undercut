@@ -56,6 +56,7 @@ jobs:
 
   container:
     name: Container and browser checks
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
       BASE_URL: http://localhost:5180
@@ -74,7 +75,12 @@ jobs:
           node-version: "24"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Install Chromium for preview smoke
+        if: github.event_name == 'pull_request'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Install production browsers
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
       - name: Build and start the release images
         run: |
           docker compose -f infrastructure/compose.yaml build api web
@@ -85,7 +91,12 @@ jobs:
           curl --fail --silent --show-error "$BASE_URL/api/v1/health/live" | jq -e '.ok == true'
           curl --fail --silent --show-error "$BASE_URL/api/v1/health/ready" | jq -e '.ok == true'
           curl --fail --silent --show-error "$BASE_URL/api/v1/health/version" | jq -e --arg commit "$BUILD_VERSION" '.commit == $commit'
-      - run: pnpm test:browser
+      - name: Run preview browser smoke
+        if: github.event_name == 'pull_request'
+        run: pnpm test:browser:smoke
+      - name: Run production browser suite
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: pnpm test:browser
       - name: Save tested images
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         run: docker save undercut-api:local undercut-web:local | gzip > undercut-images.tar.gz
