@@ -74,7 +74,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   app.canvas.dataset.renderer = app.renderer.name;
 
   let previous = props().campaign;
-  let panel: Panel | null = previous.state.pendingNegotiation ? 'book' : null;
+  let panel: Panel | null = previous.state.phase === 'travel' || previous.state.pendingNegotiation ? 'book' : null;
   let page: Page = 'summary';
   let pageIndex = 0;
   let journalArticle: number | null = null;
@@ -299,7 +299,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const elapsed = Math.max(0, now - start);
     const arrival = playback?.negotiated ? 1 : Math.min(1, elapsed / 420);
     const exit = playback ? Math.max(0, Math.min(1, 1 - (visitDuration - elapsed) / visitExitDuration)) : 0;
-    const doorway = layout.door.x + layout.door.w * .77 - (body.x + body.w / 2);
+    const doorway = layout.door.x + layout.door.w / 2 - (body.x + body.w / 2);
     const doorDepth = layout.door.y + layout.door.h - (body.y + body.h);
     const step = Math.max((1 - arrival) ** 2, exit ** 2);
     const thinking = playback && !playback.revealed && arrival === 1 ? Math.sin(elapsed / 210) * 2 : 0;
@@ -452,7 +452,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
     if (town && phase !== 'travel') {
       const journalName = `${town.name} Journal`;
-      const journalW = Math.min(155, layout.bay.x + layout.bay.w * .20 - margin - 13);
+      const journalW = Math.min(155, layout.door.x - margin - 13);
       control(scene, 'town-journal', `Open ${journalName}`, rect(margin + 3, 67, journalW, 44), () => {
         journalArticle = null;
         show('journal', 'town-journal');
@@ -1170,7 +1170,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         renderOutcome = true;
       } else if (current.phase !== prior.phase) {
         focus(current.phase === 'travel' ? 'preview-meadow' : 'book');
-        panel = null;
+        panel = current.phase === 'travel' ? 'book' : null;
+        returnFocus = 'book';
         viewedVendor = '';
         selectedOffer = '';
         selectedTown = 0;
@@ -1178,6 +1179,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         pageIndex = 0;
         transition = undefined;
         motion.clear();
+        if (panel) animate('open');
       } else if (current.buyingComplete !== prior.buyingComplete) {
         focus('setup-0');
         pageIndex = 0;

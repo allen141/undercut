@@ -5,7 +5,7 @@ import { expect, test as base, type Page } from '@playwright/test';
 import { Pool } from 'pg';
 import type { CommandRequest } from '@undercut/contracts';
 import { WINDOW_SLOT_INDEX, applyCommand, newGame, quantity, type State } from '@undercut/game-core';
-import { roomLayout, shopScale } from '../apps/web/src/ShopLayout.js';
+import { roomLayout, shopScale, type Bounds } from '../apps/web/src/ShopLayout.js';
 
 const run = promisify(execFile);
 const password = 'browser-test-credential-41';
@@ -115,16 +115,22 @@ async function chooseTown(page: Page, name: string, keyboard = false) {
   }
 }
 
-async function checkTownJournal(page: Page, name: string, issue: string, picture: string, day: number) {
+async function roomViewport(page: Page) {
   const canvas = (await shopCanvas(page).boundingBox())!;
   const scale = shopScale(canvas.width, canvas.height);
   const layout = roomLayout(canvas.width / scale, canvas.height / scale);
-  const clip = {
-    x: canvas.x + (layout.bay.x + layout.bay.w * .24) * scale,
-    y: canvas.y + (layout.bay.y + layout.bay.h * .18) * scale,
-    width: layout.bay.w * .52 * scale,
-    height: layout.bay.h * .65 * scale,
-  };
+  const clip = (bounds: Bounds, x: number, y: number, w: number, h: number) => ({
+    x: canvas.x + (bounds.x + bounds.w * x) * scale,
+    y: canvas.y + (bounds.y + bounds.h * y) * scale,
+    width: bounds.w * w * scale,
+    height: bounds.h * h * scale,
+  });
+  return { layout, clip };
+}
+
+async function checkTownJournal(page: Page, name: string, issue: string, picture: string, day: number) {
+  const room = await roomViewport(page);
+  const clip = room.clip(room.layout.window, .14, .12, .72, .68);
   const windowBefore = await page.screenshot({ clip });
   await activate(page, `Open ${name} Journal`);
   const journal = page.getByRole('region', { name: `${name} Journal` });
@@ -214,8 +220,17 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
   const closing = action(page, 'Day’s takings');
   const accept = action(page, 'Accept offer');
   let timeline = reloadAtOffer ? await watchVisitorOutcomes(page) : undefined;
+  const checkDoor = test.info().project.name.endsWith('-chromium');
+  const room = await roomViewport(page);
+  const clip = room.clip(room.layout.door, .42, .72, .17, .18);
+  const closedDoor = checkDoor ? await page.screenshot({ clip }) : undefined;
   await activate(page, 'Open the shop');
   await expect(action(page, 'Serve customer')).toHaveCount(0);
+  if (closedDoor) {
+    await expect(action(page, 'Open business book')).toBeEnabled();
+    await expect.poll(async () => (await page.screenshot({ clip })).equals(closedDoor)).toBe(false);
+    await page.screenshot({ path: test.info().outputPath('business-open-door.png') });
+  }
   if (reloadAtOffer) {
     await expect(page.locator('[data-canvas-status]')).toContainText(/^Customer 2 of 8\. Looking for/);
     await activate(page, 'Hurry this visitor');
@@ -274,6 +289,7 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
   await expect(page.locator('[data-canvas-ledger] li')).toHaveCount(8);
   await expect(report).toContainText(`${state.history.at(-1)?.profit}g`);
   expect(state.history.at(-1)?.profit).toBe(state.revenue - state.costOfSales);
+  if (closedDoor) await expect.poll(async () => (await page.screenshot({ clip })).equals(closedDoor)).toBe(true);
   await activate(page, 'Day’s takings');
   return revision;
 }
@@ -320,14 +336,25 @@ test('previews towns on the dial and confirms the destination', { tag: '@smoke' 
   await expect(shopCanvas(page)).toHaveAttribute('data-renderer', 'webgl');
   await expectNoOverflow(page);
   await expect(action(page, 'Preview Meadow')).toHaveAttribute('aria-pressed', 'true');
-  await activate(page, 'Open destination book');
   const atlas = page.getByRole('region', { name: 'Route Atlas' });
   await expect(atlas).toContainText('Meadow · Grain & herbs');
+  await activate(page, 'Close panel');
+  await expect(atlas).toHaveCount(0);
+  await activate(page, 'Open destination book');
   await expect(atlas.getByText(/Global average \d/)).toHaveCount(6);
   await expect(atlas).toContainText('Crystal. Day 1, unavailable.');
+  const room = await roomViewport(page);
+  const doorCenter = room.clip(room.layout.door, .5, 0, 0, 0).x;
+  const confirm = (await action(page, 'Choose Meadow').boundingBox())!;
+  expect(confirm.x + confirm.width / 2).toBeCloseTo(doorCenter, 0);
+  expect(room.layout.window.x + room.layout.window.w).toBeLessThan(room.layout.door.x);
+  const clip = room.clip(room.layout.window, .18, .32, .64, .46);
+  const meadowVista = await page.screenshot({ clip });
   await activate(page, 'Preview Forge');
   await expect(atlas).toContainText('Forge · Iron & crystal');
   await expect(action(page, 'Preview Forge')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(async () => (await page.screenshot({ clip })).equals(meadowVista)).toBe(false);
+  await screenshot(page, info.outputPath('route-atlas-and-wall.png'));
   await expectRevision(page, 0);
   expect(commands).toEqual([]);
   await chooseTown(page, 'Harbor', info.project.name === 'desktop-chromium');
@@ -347,6 +374,7 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await invite(page, account);
   await createCampaign(page, 'Saffron Counter');
   await seedGrainNegotiation(page, 'Saffron Counter');
+  await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Meadow · Grain & herbs');
   await screenshot(page, info.outputPath('01-travel.png'));
   await chooseTown(page, 'Meadow');
   await expectRevision(page, 1);
@@ -369,6 +397,7 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await activate(page, 'Day’s takings');
   await activate(page, 'Begin day 2');
   await expectRevision(page, closingRevision + 1);
+  await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 2');
   if (info.project.name === 'mobile-chromium') {
     const dial = action(page, 'Preview Meadow');
     const portraitDial = await dial.boundingBox();
@@ -498,6 +527,7 @@ test('docks the Accounts Book across a phone running in desktop viewport mode', 
   await page.screenshot({ path: info.outputPath('accounts-book-desktop-mode.png') });
   await activate(page, 'Begin day 10');
   await expectRevision(page, 1);
+  await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 10');
 });
 
 test('keeps two campaigns independent across two days, reconnects, and accepts a reset link', async ({ browser, context, page, account, baseURL }, info) => {

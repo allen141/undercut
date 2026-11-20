@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
-import { TOWNS, quantity, type GoodId, type State } from '@undercut/game-core';
+import { TOWNS, WINDOW_SLOT_INDEX, quantity, type GoodId, type State } from '@undercut/game-core';
 import { fitSprite, placeSprite, type ShopTextures } from './ShopAssets.js';
 import { roomLayout, type Bounds } from './ShopLayout.js';
 
@@ -34,57 +34,50 @@ function drawRoomBackground(layer: Container, art: ShopTextures, width: number, 
   layer.addChild(new Graphics().rect(0, horizon, width, floorBounds.h).fill({ color: 0x522c26, alpha: .18 }));
 }
 
-function drawPortal(layer: Container, art: ShopTextures, bay: Bounds, townId: string | null) {
-  const { x, y, w, h } = bay;
-  const wx = (u: number) => x + w * u;
-  const wy = (v: number) => y + h * v;
-  const opening = new Graphics()
-    .moveTo(wx(.229), wy(.982)).lineTo(wx(.229), wy(.548))
-    .bezierCurveTo(wx(.229), wy(.392), wx(.33), wy(.239), wx(.47), wy(.245))
-    .bezierCurveTo(wx(.604), wy(.237), wx(.709), wy(.40), wx(.709), wy(.55))
-    .lineTo(wx(.709), wy(.982)).closePath().fill(0xffffff);
+function drawFrontWall(layer: Container, art: ShopTextures, door: Bounds, window: Bounds,
+  townId: string | null, open: boolean) {
+  // The openings share one projection so the wall and its frames occlude a continuous street.
+  const wx = (u: number) => window.x + window.w * u;
+  const wy = (v: number) => window.y + window.h * v;
+  const dx = (u: number) => door.x + door.w * u;
+  const dy = (v: number) => door.y + door.h * v;
+  const doorViewBottom = dy(open ? 1 : .65);
+  const openings = new Graphics()
+    .moveTo(wx(.09), wy(.909)).lineTo(wx(.09), wy(.297))
+    .quadraticCurveTo(wx(.27), wy(.096), wx(.50), wy(.065))
+    .quadraticCurveTo(wx(.71), wy(.096), wx(.92), wy(.297))
+    .lineTo(wx(.92), wy(.909)).closePath().fill(0xffffff)
+    .moveTo(dx(.20), doorViewBottom).lineTo(dx(.20), dy(.47))
+    .bezierCurveTo(dx(.20), dy(.31), dx(.33), dy(.21), dx(.50), dy(.21))
+    .bezierCurveTo(dx(.68), dy(.21), dx(.805), dy(.31), dx(.805), dy(.47))
+    .lineTo(dx(.805), doorViewBottom).closePath().fill(0xffffff);
   const vista = new Container();
-  const town = townId === 'harbor' || townId === 'forge' || townId === 'meadow' ? art[`town-${townId}`] : null;
-  if (town) {
-    vista.addChild(fitSprite(town, { x: wx(.22), y: wy(.237), w: w * .50, h: h * .77 }, 'cover', .4));
+  const outside = { x: window.x, y: door.y, w: door.x + door.w - window.x, h: door.h };
+  if (townId === 'harbor' || townId === 'forge' || townId === 'meadow') {
+    vista.addChild(fitSprite(art[`town-${townId}`], outside, 'cover', .54));
   } else {
-    const voidArt = new Graphics().rect(x, y, w, h).fill(0x32254e);
-    for (let i = 0; i < 22; i++) {
-      const px = wx(.245 + (i * .103) % .44);
-      const py = wy(.27 + (i * .161) % .69);
-      voidArt.circle(px, py, 1 + (i % 3) * .45).fill({ color: 0xe9c9ff, alpha: .45 + (i % 4) * .12 });
-    }
-    vista.addChild(voidArt);
+    vista.addChild(new Graphics().rect(outside.x, outside.y, outside.w, outside.h).fill(0x35263b));
   }
-  vista.mask = opening;
-  // Keep the illustrated brass trim and use its inset as the dial's socket.
-  const socket = new Graphics().moveTo(wx(.453), wy(.045))
-    .quadraticCurveTo(wx(.502), wy(.055), wx(.546), wy(.088))
-    .lineTo(wx(.517), wy(.161)).quadraticCurveTo(wx(.487), wy(.19), wx(.452), wy(.207))
-    .quadraticCurveTo(wx(.416), wy(.19), wx(.388), wy(.161)).lineTo(wx(.362), wy(.088))
-    .quadraticCurveTo(wx(.405), wy(.055), wx(.453), wy(.045)).closePath().fill(0x3d2b4c)
-    .stroke({ color: 0x6f4a60, width: Math.max(1, h * .009) });
-  const socketRadius = Math.min(w, h) * .039;
-  socket.circle(wx(.453), wy(.119), socketRadius).fill(0x22192c)
-    .stroke({ color: 0x976b60, width: Math.max(1, h * .005) });
-  layer.addChild(glow(wx(.47), wy(.54), Math.min(w, h) * .55, 0xac60ef), vista, opening,
-    placeSprite(art['portal-frame'], bay), socket);
+  vista.mask = openings;
+  layer.addChild(vista, openings, placeSprite(art['window-frame'], window),
+    placeSprite(art[open ? 'door-open' : 'door-closed'], door));
 }
 
 export function dialTargets(dial: Bounds) {
-  const size = Math.max(24, dial.w * .21);
-  const target = (x: number, y: number): Bounds => ({ x: dial.x + dial.w * x - size / 2,
-    y: dial.y + dial.h * y - size / 2, w: size, h: size });
-  return { towns: { meadow: target(.49, .28), forge: target(.28, .54), harbor: target(.696, .54) },
-    confirm: target(.49, .475) };
+  const target = (x: number, y: number, w: number, h: number): Bounds => ({
+    x: dial.x + dial.w * x - w / 2, y: dial.y + dial.h * y - h / 2, w, h,
+  });
+  const town = (x: number, y: number) => target(x, y, dial.w * .27, Math.max(24, dial.h * .47));
+  return { towns: { meadow: town(.238, .61), forge: town(.50, .43), harbor: town(.763, .61) },
+    confirm: target(.50, .85, Math.max(30, dial.w * .24), Math.max(24, dial.h * .29)) };
 }
 
 export function drawDial(layer: Container, art: ShopTextures, dial: Bounds, town: string | null, expanded = false) {
-  layer.addChild(fitSprite(art['portal-dial'], dial));
+  layer.addChild(placeSprite(art['destination-dial'], dial));
   const destination = TOWNS.find(destination => destination.id === town);
   if (!destination || !expanded) return;
   const { x, y, w, h } = dialTargets(dial).towns[destination.id];
-  layer.addChild(new Graphics().circle(x + w / 2, y + h / 2, dial.w * .125)
+  layer.addChild(new Graphics().ellipse(x + w / 2, y + h / 2, w * .43, h * .46)
     .stroke({ color: 0xffe2a6, width: 2, alpha: .9 }));
 }
 
@@ -108,10 +101,8 @@ function drawShelf(layer: Container, art: ShopTextures, b: Bounds, shelf: State[
     const frame = placeSprite(art['shelf-empty'], { x, y: y - h * .08, w, h: h * 1.18 });
     if (selected) frame.tint = 0xffdf99;
     layer.addChild(frame);
-  } else {
-    const sill = new Graphics().roundRect(x, platform, w, 8, 3).fill(0x7c4e3a)
-      .roundRect(x + 2, platform - 2, w - 4, 5, 3).fill(selected ? 0xf0bf78 : 0xc28c60);
-    layer.addChild(sill);
+  } else if (selected) {
+    layer.addChild(new Graphics().roundRect(x + 4, platform, w - 8, 3, 1).fill({ color: 0xf0bf78, alpha: .7 }));
   }
   if (!shelf?.goodId) return;
   const size = Math.min(h * .46, w * .17, 44);
@@ -137,13 +128,15 @@ export function setCoin(sprite: Sprite, x: number, y: number, radius: number, st
 
 export function drawRoom(layer: Container, foreground: Container, art: ShopTextures, width: number, height: number,
   state: State, options: ArtOptions = {}) {
-  const { portrait, dial, bay, shelves, bell, book, counter, horizon } = roomLayout(width, height);
+  const { portrait, dial, bay, door, window, shelves, bell, book, counter, horizon } = roomLayout(width, height);
   drawRoomBackground(layer, art, width, height, horizon, portrait);
   const townId = options.townId ?? state.townId;
-  drawPortal(layer, art, bay, townId);
+  drawFrontWall(layer, art, door, window, townId, state.phase === 'open');
   if (state.phase !== 'travel') drawDial(layer, art, dial, townId);
 
-  const lantern = { x: Math.max(10, bay.x - 49), y: bay.y + 38, w: 39, h: 59 };
+  const lanternW = Math.min(39, Math.max(17, (door.x - window.x - window.w) * .82));
+  const lantern = { x: (window.x + window.w + door.x - lanternW) / 2, y: bay.y + 12,
+    w: lanternW, h: lanternW * 1.5 };
   layer.addChild(glow(lantern.x + lantern.w / 2, lantern.y + lantern.h * .6, 64, 0xffbb62),
     fitSprite(art.lantern, lantern));
   const plantW = Math.min(portrait ? 58 : 113, width * .15);
@@ -151,7 +144,7 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
   shelves.forEach((bounds, index) => {
     const shelf = state.shelves[index];
     const stock = shelf?.goodId ? options.stock?.(shelf.goodId) ?? quantity(state, shelf.goodId) : 0;
-    drawShelf(layer, art, bounds, shelf, stock, options.selectedShelf === index, index === 3);
+    drawShelf(layer, art, bounds, shelf, stock, options.selectedShelf === index, index === WINDOW_SLOT_INDEX);
   });
 
   foreground.addChild(placeSprite(art.counter, counter));
