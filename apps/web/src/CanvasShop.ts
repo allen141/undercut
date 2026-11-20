@@ -3,10 +3,10 @@ import 'pixi.js/browser';
 import 'pixi.js/unsafe-eval';
 import {
   CUSTOMERS_PER_DAY, GOODS, MAX_VENDOR_VISITS, REPUTATION_TIERS, TOWNS, WINDOW_SLOT_INDEX,
-  inventoryValue, priceRange, quantity, reputationFor, vendorOffersForTown, vendorsInTown, type GoodId,
+  inventoryValue, priceRange, quantity, reputationFor, vendorOffersForTown, vendorsInTown, type CustomerResult, type GoodId,
 } from '@undercut/game-core';
-import type { GameProps } from './Game.js';
-import { drawRoom, drawVista, phaseBooks, roomLayout, type Bounds } from './ShopArt.js';
+import type { BusinessPresentation, GameProps } from './Game.js';
+import { drawCoin, drawCustomer, drawGood, drawRoom, drawVista, phaseBooks, roomLayout, type Bounds } from './ShopArt.js';
 
 extensions.remove(AccessibilitySystem);
 
@@ -14,8 +14,11 @@ type Rect = Bounds;
 type Action = { id: string; label: string; box: Rect; run: () => void; disabled?: boolean; active?: boolean };
 type Panel = 'book' | 'shelf' | 'price' | 'stock';
 type Page = 'summary' | 'vendors' | 'activity' | 'stock';
+type Playback = { index: number; until: number; start: number; revealed: boolean; negotiated: boolean };
 export type ShopController = { update(): void; destroy(): void };
 
+const visitDuration = 1700;
+const visitReveal = 480;
 const cream = 0xffe7bb;
 const muted = 0xdebb98;
 const gold = 0xf0bd73;
@@ -28,7 +31,25 @@ const rect = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w, h
 const displayName = (slot: number) => slot === WINDOW_SLOT_INDEX ? 'Window display' : `Floor display ${slot + 1}`;
 const offerName = { regular: 'Regular', dailyDeal: 'Daily deal', reputationDeal: 'Reputation deal' };
 
-export async function mountShop(host: HTMLElement, keyboard: HTMLElement, reading: HTMLElement, props: () => GameProps): Promise<ShopController> {
+const outcomeCopy = {
+  sold: ['Sale made', 'Bought at the listed price.'],
+  notDisplayed: ['No sale', 'This item was not on display.'],
+  soldOut: ['No sale', 'This item was sold out.'],
+  overBudget: ['No sale', 'The shelf price was above their budget.'],
+  offerAccepted: ['Offer accepted', 'Bought at the agreed price.'],
+  priceHeld: ['Sale made', 'Bought at the shelf price.'],
+  offerDeclined: ['Offer declined', 'The visitor left without buying.'],
+  priceHeldLost: ['No sale', 'The visitor walked away at the shelf price.'],
+} satisfies Record<CustomerResult['result'], [string, string]>;
+
+function outcome(result: CustomerResult) {
+  const [title, detail] = outcomeCopy[result.result];
+  const good = nameOf(result.goodId);
+  return { title, detail, good, line: `${good} · ${title}. ${detail}${result.price === null ? '' : ` You received ${money(result.price)}.`}` };
+}
+
+export async function mountShop(host: HTMLElement, keyboard: HTMLElement, reading: HTMLElement,
+  props: () => GameProps, presentBusiness: (visit: BusinessPresentation | null) => void): Promise<ShopController> {
   const app = new Application();
   await app.init({
     width: Math.max(1, host.clientWidth), height: Math.max(1, host.clientHeight), preference: 'webgl',
@@ -60,17 +81,27 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   let timer: ReturnType<typeof setTimeout> | undefined;
   let attemptedRevision: number | undefined;
   let transition: { start: number; kind: 'open' | 'turn'; from: Rect } | undefined;
-  let playback: { served: number; until: number } | undefined;
+  let playback: Playback | undefined;
   let animationClock: ReturnType<typeof setTimeout> | undefined;
+  let visitPausedAt: number | undefined;
+  let visitFrame = 0;
+  let lastVisitFrame = 0;
+  let offerArrival: number | undefined;
+  let lastPresentation: BusinessPresentation | null = null;
   let readingLayer: Container | undefined;
   let lastReadout = '';
   const semantic = new Map<string, HTMLButtonElement>();
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const art = new Container();
+  const visitArt = new Container();
+  const visitor = new Graphics();
+  const reward = new Graphics();
   const scene = new Container();
   const motion = new Graphics();
   let artKey = '';
-  app.stage.addChild(art, scene, motion);
+  let visitorKey = '';
+  visitArt.addChild(visitor, reward);
+  app.stage.addChild(art, visitArt, scene, motion);
 
   function box(layer: Container, b: Rect, fill: number, border?: number, alpha = 1, radius = 7) {
     const shape = new Graphics().roundRect(b.x, b.y, b.w, b.h, radius).fill({ color: fill, alpha });
@@ -150,7 +181,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   }
 
   function close() {
-    if (props().campaign.state.pendingNegotiation) return;
+    if (!playback && props().campaign.state.pendingNegotiation) return;
     if (panel === 'price') {
       panel = 'shelf';
       focus('price');
@@ -209,6 +240,74 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     show('shelf', origin);
   }
 
+  function paintVisit(now: number) {
+    reward.clear();
+    const state = props().campaign.state;
+    const index = playback?.index ?? state.pendingNegotiation?.customerIndex;
+    if (index === undefined) {
+      visitor.visible = false;
+      return;
+    }
+    const layout = roomLayout(w, h);
+    const body = layout.visitor;
+    const key = `${state.seed}:${state.day}:${index}:${w}:${h}`;
+    if (key !== visitorKey) {
+      visitor.clear();
+      drawCustomer(visitor, body, state.seed, index);
+      visitorKey = key;
+    }
+    visitor.visible = true;
+    visitor.position.set(0);
+    visitor.alpha = 1;
+    const start = playback?.start ?? offerArrival;
+    if (start === undefined || reducedMotion.matches) return;
+
+    const elapsed = Math.max(0, now - start);
+    const arrival = playback?.negotiated ? 1 : Math.min(1, elapsed / 420);
+    const exit = playback ? Math.max(0, Math.min(1, (elapsed - 1360) / 340)) : 0;
+    const doorway = layout.door.x + layout.door.w * .77 - (body.x + body.w / 2);
+    const step = Math.max((1 - arrival) ** 2, exit ** 2);
+    visitor.position.set(doorway * step, -Math.sin(step * Math.PI * 2) * 4);
+    visitor.alpha = Math.min(1, .28 + arrival * 3, 1 - exit ** 2);
+
+    if (!playback?.revealed) return;
+    const result = state.customerResults.find(entry => entry.customerIndex === index);
+    if (result?.price == null) return;
+    const slot = state.shelves.findIndex(shelf => shelf.goodId === result.goodId);
+    const display = layout.shelves[slot];
+    const progress = Math.min(1, (elapsed - visitReveal) / 790);
+    const animateArc = (from: number, to: number, t: number) => from + (to - from) * t;
+    const customerX = body.x + body.w * .62 + visitor.x;
+    const customerY = body.y + body.h * .64 + visitor.y;
+    if (display && progress < .91) {
+      const t = Math.min(1, progress / .75);
+      const fromX = display.x + display.w * .18;
+      const fromY = display.y + display.h * (slot === WINDOW_SLOT_INDEX ? .80 : .57);
+      drawGood(reward, result.goodId, animateArc(fromX, customerX, t), animateArc(fromY, customerY, t) -
+        Math.sin(Math.PI * t) * 24, 18);
+    }
+    const coinX = layout.bell.x + layout.bell.w * .5;
+    const coinY = layout.bell.y + layout.bell.h * .53;
+    for (let i = 0; i < 3; i++) {
+      const t = Math.max(0, Math.min(1, (progress - i * .12) / .73));
+      if (t > 0 && t < 1) drawCoin(reward, animateArc(customerX, coinX, t), animateArc(customerY, coinY, t) -
+        Math.sin(Math.PI * t) * (32 + i * 12), 7, .44 + Math.abs(Math.cos(t * Math.PI * 3)) * .56);
+    }
+  }
+
+  function animateVisit(now: number) {
+    visitFrame = 0;
+    if ((!playback && offerArrival === undefined) || disposed || document.hidden || reducedMotion.matches) return;
+    const arrivalFinished = offerArrival !== undefined && now - offerArrival >= 420;
+    if (arrivalFinished || now - lastVisitFrame >= 1000 / 30) {
+      paintVisit(now);
+      app.render();
+      lastVisitFrame = now;
+    }
+    if (arrivalFinished) offerArrival = undefined;
+    if (playback || offerArrival !== undefined) visitFrame = requestAnimationFrame(animateVisit);
+  }
+
   function render() {
     if (disposed) return;
     scene.removeChildren().forEach(child => child.destroy({ children: true }));
@@ -216,10 +315,30 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const p = props();
     const state = p.campaign.state;
     const phase = playback ? 'open' : state.phase;
-    const served = playback?.served ?? state.served;
-    const laterRevenue = playback ? state.customerResults.filter(result => result.customerIndex >= served)
-      .reduce((value, result) => value + (result.price ?? 0), 0) : 0;
+    const served = playback ? playback.index + Number(playback.revealed) : state.served;
+    // The server has saved the batch. Show the shop balances at the last revealed visitor.
+    const remainingSales = playback ? state.customerResults.filter(result => result.customerIndex >= served && result.price !== null) : [];
+    const laterRevenue = remainingSales.reduce((value, result) => value + (result.price ?? 0), 0);
+    const visibleStock = (goodId: GoodId) => quantity(state, goodId) + remainingSales.filter(result => result.goodId === goodId).length;
     const receipts = state.revenue - laterRevenue;
+    const cash = state.gold - laterRevenue;
+    const latest = state.customerResults.find(result => result.customerIndex === served - 1);
+    const latestOutcome = latest ? outcome(latest) : undefined;
+    const request = playback ? state.customers[playback.index]?.goodId : undefined;
+    const activeResult = playback?.revealed ? latestOutcome : undefined;
+    const requestText = request ? `Looking for ${nameOf(request)}` : 'Arriving at the shop';
+    const offer = state.pendingNegotiation;
+    const nextPresentation = phase !== 'open' ? null : {
+      served,
+      announcement: playback
+        ? `Customer ${playback.index + 1} of ${CUSTOMERS_PER_DAY}. ${activeResult?.line ?? `${requestText}.`}`
+        : offer ? `Customer ${offer.customerIndex + 1} offers ${money(offer.offer)} for ${nameOf(offer.goodId)}, listed at ${money(offer.shelfPrice)}.`
+          : `${served} of ${CUSTOMERS_PER_DAY} customer visits. ${latestOutcome?.line ?? state.log[served - 1] ?? 'The shop is open.'}`,
+    };
+    if (nextPresentation?.announcement !== lastPresentation?.announcement || nextPresentation?.served !== lastPresentation?.served) {
+      presentBusiness(nextPresentation);
+      lastPresentation = nextPresentation;
+    }
     const theme = phaseBooks[phase];
     const town = TOWNS.find(t => t.id === state.townId);
     const preview = TOWNS[selectedTown];
@@ -264,11 +383,11 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
     const townId = phase === 'travel' ? preview?.id : undefined;
     const artShelf = panel === 'shelf' || panel === 'price' ? selectedShelf : undefined;
-    const displayState = state.shelves.map(shelf => [shelf.goodId, shelf.goodId ? Math.min(5, quantity(state, shelf.goodId)) : 0]);
-    const key = JSON.stringify([w, h, phase, phase === 'open' ? served : null, townId ?? state.townId, artShelf, modal, displayState]);
+    const displayState = state.shelves.map(shelf => [shelf.goodId, shelf.goodId ? Math.min(5, visibleStock(shelf.goodId)) : 0]);
+    const key = JSON.stringify([w, h, phase, townId ?? state.townId, artShelf, modal, displayState]);
     if (key !== artKey) {
       art.removeChildren().forEach(child => child.destroy({ children: true }));
-      drawRoom(art, w, h, { ...state, phase, served }, { townId, selectedShelf: artShelf, bookOpen: modal });
+      drawRoom(art, w, h, { ...state, phase }, { townId, selectedShelf: artShelf, bookOpen: modal, stock: visibleStock });
       artKey = key;
     }
 
@@ -277,7 +396,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     control(scene, 'back', 'All campaigns', rect(margin + 3, 12, navW, 44), p.back,
       { copy: narrow ? '‹ Menu' : '‹ All campaigns', disabled: p.busy || !p.online });
     control(scene, 'stock', 'Inventory and gold', rect(w - margin - (narrow ? 67 : 114), 12, narrow ? 64 : 111, 44),
-      () => show('stock', 'stock'), { copy: money(state.gold - laterRevenue) });
+      () => show('stock', 'stock'), { copy: money(cash) });
     text(scene, narrow ? `Day ${state.day} · ${town?.name ?? 'Travel'}` : `${p.campaign.name.slice(0, 36)}  /  Day ${state.day} · ${town?.name ?? 'Between towns'}`,
       w / 2, 34, { align: 'center', max: w - (narrow ? 155 : 308), serif: !narrow, size: narrow ? 13 : 17 });
 
@@ -301,7 +420,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         if (phase === 'open' && !shelf.goodId) return;
         const tagW = Math.min(bounds.w - 3, 142);
         box(scene, rect(bounds.x + (bounds.w - tagW) / 2, bounds.y + bounds.h - 15, tagW, 28), ink, 0x815e4b, .92, 4);
-        const count = shelf.goodId ? quantity(state, shelf.goodId) : 0;
+        const count = shelf.goodId ? visibleStock(shelf.goodId) : 0;
         const caption = shelf.goodId ? `${nameOf(shelf.goodId)} · ${phase === 'open' ? `${count} left` : money(shelf.price)}` : displayName(slot);
         text(scene, caption, bounds.x + bounds.w / 2,
           bounds.y + bounds.h - 1, { align: 'center', size: 11, max: tagW - 5 });
@@ -326,11 +445,35 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         (progressW - 24) * served / CUSTOMERS_PER_DAY, 6), gold, undefined, 1, 3);
     }
 
+    const focusOutcome = activeResult ?? (phase === 'report' ? latestOutcome : undefined);
+    if (playback || focusOutcome) {
+      const cardW = Math.min(narrow ? 298 : 370, w - 2 * margin - 12);
+      const cardX = Math.max(margin + 6, Math.min(w - cardW - margin - 6, layout.visitor.x - cardW * .35));
+      const cardY = Math.max(65, layout.visitor.y - 112);
+      const sale = focusOutcome && latest && latest.price !== null ? latest : undefined;
+      const cardAccent = sale ? gold : focusOutcome ? 0xca9986 : 0x9ba99c;
+      const index = playback?.index ?? latest?.customerIndex ?? served - 1;
+      box(scene, rect(cardX, cardY, cardW, 103), sale ? 0x382a2d : ink, cardAccent, .97, 10);
+      box(scene, rect(cardX + 1, cardY + 15, 4, 73), cardAccent, undefined, 1, 2);
+      text(scene, `Customer ${index + 1} of ${CUSTOMERS_PER_DAY}`, cardX + 14, cardY + 17, { size: 12, color: cardAccent });
+      const detail = focusOutcome ? `${focusOutcome.good} · ${focusOutcome.detail}` : 'The visitor checks your displays.';
+      text(scene, focusOutcome?.title ?? requestText, cardX + 14, cardY + 45,
+        { size: narrow ? 21 : 24, serif: true, max: cardW - (sale ? 121 : 28) });
+      text(scene, detail, cardX + 14, cardY + 79, { size: narrow ? 13 : 14, max: cardW - (sale ? 115 : 28) });
+      if (sale) {
+        const badge = new Graphics();
+        drawGood(badge, sale.goodId, cardX + cardW - 52, cardY + 48, 27);
+        drawCoin(badge, cardX + cardW - 79, cardY + 77, 9);
+        scene.addChild(badge);
+        text(scene, `+${money(sale.price!)}`, cardX + cardW - 65, cardY + 77, { size: 19, color: gold });
+      }
+    }
+
     const tip = !p.online ? 'You’re offline. Reconnect to continue trading.' : p.error || (
       p.busy ? 'Saving…' : p.pending ? 'Confirm your last action.' :
       phase === 'travel' ? 'Turn the door dial or open the atlas to choose a town.' :
       phase === 'prepare' ? state.buyingComplete ? 'Set up your displays and open the shop.' : 'Open the supplier ledger to compare vendors.' :
-      phase === 'open' ? state.log[served - 1] ?? 'The shop is open. Customers are on their way.' :
+      phase === 'open' ? latestOutcome?.line ?? state.log[served - 1] ?? 'The shop is open. Customers are on their way.' :
       'The shop is closed. Review your accounts when ready.');
     box(scene, rect(margin, h - 43, w - margin * 2, 35), ink, 0x76574b, .94);
     text(scene, tip, w / 2, h - 25, { align: 'center', max: w - margin * 2 - 14, size: narrow ? 11 : 13, color: p.error ? 0xffbcb0 : muted });
@@ -387,10 +530,10 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       if (!state.pendingNegotiation || playback) button('dismiss', 'Close panel', inner - 41, 8, 43, close, { copy: '×' });
       if (panel === 'stock') {
         title('Stock chest');
-        GOODS.forEach((good, i) => line(good.name, String(quantity(state, good.id)), 65 + i * 32));
+        GOODS.forEach((good, i) => line(good.name, String(visibleStock(good.id)), 65 + i * 32));
         rule(249);
-        line('Stock value at cost', money(inventoryValue(state)), 269);
-        line('Cash remaining', money(state.gold), 299);
+        if (!playback) line('Stock value at cost', money(inventoryValue(state)), 269);
+        line('Cash remaining', money(cash), 299);
       }
       if (panel === 'book' && phase === 'travel') {
         title('Route Atlas', inner - 136);
@@ -718,6 +861,10 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       semantic.get(nextFocus)?.focus({ preventScroll: true });
       nextFocus = '';
     }
+    paintVisit(performance.now());
+    if ((playback || offerArrival !== undefined) && !visitFrame && !reducedMotion.matches && !document.hidden) {
+      visitFrame = requestAnimationFrame(animateVisit);
+    }
     app.render();
   }
 
@@ -738,7 +885,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       if (latest.campaign.revision !== revision || latest.busy || latest.pending || !latest.online) return;
       attemptedRevision = revision;
       latest.send({ type: 'serve' });
-    }, reducedMotion.matches ? 0 : 750);
+    }, reducedMotion.matches ? 0 : 260);
   }
 
   function showOutcome() {
@@ -749,6 +896,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       panel = 'book';
       returnFocus = 'book';
       focus('accept-offer', true);
+      if (!reducedMotion.matches && !document.hidden) offerArrival = performance.now();
     } else if (state.phase === 'report') {
       focus('book');
       panel = null;
@@ -761,16 +909,49 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     scheduleService();
   }
 
-  function playBusiness() {
-    if (!playback || disposed) return;
-    if (playback.served >= playback.until || reducedMotion.matches) {
-      playback = undefined;
-      showOutcome();
+  function startVisit(index: number, until: number, negotiated: boolean) {
+    offerArrival = undefined;
+    playback = { index, until, start: performance.now(), revealed: false, negotiated };
+    visitPausedAt = document.hidden ? playback.start : undefined;
+    render();
+    scheduleVisit();
+  }
+
+  function scheduleVisit() {
+    clearTimeout(animationClock);
+    if (!playback || document.hidden) return;
+    const deadline = playback.revealed ? visitDuration : visitReveal;
+    animationClock = setTimeout(advanceVisit, Math.max(0, playback.start + deadline - performance.now()));
+  }
+
+  function advanceVisit() {
+    if (!playback || disposed || document.hidden) return;
+    if (!playback.revealed) {
+      // A slow frame must still give the revealed result its full time on screen.
+      playback.start = performance.now() - visitReveal;
+      playback.revealed = true;
+      render();
+      scheduleVisit();
       return;
     }
-    playback.served++;
-    render();
-    animationClock = setTimeout(playBusiness, 285);
+    const next = playback.index + 1;
+    if (next < playback.until) startVisit(next, playback.until, false);
+    else {
+      playback = undefined;
+      showOutcome();
+    }
+  }
+
+  function visitVisibility() {
+    if (document.hidden) {
+      if (playback) visitPausedAt = performance.now();
+      clearTimeout(animationClock);
+    } else if (playback && visitPausedAt !== undefined) {
+      playback.start += performance.now() - visitPausedAt;
+      visitPausedAt = undefined;
+      render();
+      scheduleVisit();
+    }
   }
 
   function update() {
@@ -778,17 +959,17 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const current = campaign.state;
     const prior = previous.state;
     let renderOutcome = false;
+    let firstVisit: number | undefined;
     if (campaign.revision !== previous.revision) {
-      if (prior.phase === 'open' && current.served > prior.served && !reducedMotion.matches && !document.hidden) {
-        clearTimeout(animationClock);
-        playback = { served: prior.served, until: current.served };
+      if (prior.phase === 'open' && current.day === prior.day && current.served > prior.served) {
+        if (playback) playback.until = current.served;
+        else firstVisit = prior.served;
         if (prior.pendingNegotiation) {
           focus('book');
           panel = null;
           transition = undefined;
           motion.clear();
         }
-        animationClock = setTimeout(playBusiness, 220);
       } else if (current.pendingNegotiation || prior.phase === 'open' && current.phase === 'report') {
         renderOutcome = true;
       } else if (current.phase !== prior.phase) {
@@ -823,7 +1004,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       }
     }
     previous = campaign;
-    if (renderOutcome) showOutcome();
+    if (firstVisit !== undefined) startVisit(firstVisit, current.served, !!prior.pendingNegotiation);
+    else if (renderOutcome) showOutcome();
     else {
       render();
       scheduleService();
@@ -842,6 +1024,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     transition = undefined;
     motion.clear();
     art.scale.set(scale);
+    visitArt.scale.set(scale);
     scene.scale.set(scale);
     motion.scale.set(scale);
     app.renderer.resize(width, height);
@@ -872,11 +1055,11 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     if (reducedMotion.matches) {
       transition = undefined;
       motion.clear();
-      if (playback) {
-        clearTimeout(animationClock);
-        playBusiness();
-      } else render();
+      offerArrival = undefined;
+      cancelAnimationFrame(visitFrame);
+      visitFrame = 0;
     }
+    render();
     scheduleService();
   }
 
@@ -884,6 +1067,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   observer.observe(host);
   keyboard.addEventListener('keydown', onKey);
   reducedMotion.addEventListener('change', motionPreference);
+  document.addEventListener('visibilitychange', visitVisibility);
   if (previous.state.pendingNegotiation) focus('accept-offer', true);
   resize();
   scheduleService();
@@ -893,9 +1077,11 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       disposed = true;
       observer.disconnect();
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(visitFrame);
       clearTimeout(timer);
       clearTimeout(animationClock);
       reducedMotion.removeEventListener('change', motionPreference);
+      document.removeEventListener('visibilitychange', visitVisibility);
       keyboard.removeEventListener('keydown', onKey);
       for (const button of semantic.values()) button.remove();
       reading.replaceChildren();

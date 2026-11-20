@@ -33,7 +33,7 @@ const brass = 0xc99557;
 const ink = 0x211723;
 const warm = 0xffcc84;
 const mutedGold = 0x895c4c;
-type ArtOptions = { townId?: string; selectedShelf?: number; bookOpen?: boolean };
+type ArtOptions = { townId?: string; selectedShelf?: number; bookOpen?: boolean; stock?: (goodId: GoodId) => number };
 type Point = [number, number];
 
 export const phaseBooks = {
@@ -227,7 +227,7 @@ function drawBay(layer: Container, g: Graphics, bay: Bounds, town: string | null
 
 const goodsColors = Object.fromEntries(GOODS.map(good => [good.id, good.color])) as Record<GoodId, number>;
 
-function drawGood(g: Graphics, id: GoodId, x: number, y: number, s: number) {
+export function drawGood(g: Graphics, id: GoodId, x: number, y: number, s: number) {
   const color = goodsColors[id];
   g.ellipse(x, y, s * .60, s * .12).fill({ color: ink, alpha: .54 });
   if (id === 'crystal') {
@@ -266,18 +266,27 @@ function drawShelf(g: Graphics, b: Bounds, shelf: State['shelves'][number] | und
   }
 }
 
-function drawCustomer(g: Graphics, b: Bounds, seed: number, index: number) {
+export function drawCustomer(g: Graphics, b: Bounds, seed: number, index: number) {
   const { x, y, w, h } = b;
   const random = seeded(seed + index * 491);
   const jackets = [0x5b8a83, 0x8e688d, 0x736d9a, 0x9b654b, 0x668156];
   const skin = [0xc6916c, 0xb37b59, 0x936454, 0xd29a78];
   const coat = jackets[Math.floor(random() * jackets.length)], face = skin[Math.floor(random() * skin.length)];
+  g.ellipse(x + w * .5, y + h * 1.08, w * .58, h * .075).fill({ color: ink, alpha: .35 });
   g.roundRect(x, y + h * .42, w, h * .66, w * .26).fill(coat)
     .circle(x + w * .5, y + h * .30, w * .33).fill(face)
     .roundRect(x + w * .16, y + h * .04, w * .69, h * .16, 7).fill(0x373140);
   if (index % 2) g.roundRect(x + w * .06, y + h * .17, w * .90, 6, 2).fill(0x373140);
   g.circle(x + w * .39, y + h * .29, 1.5).fill(ink).circle(x + w * .61, y + h * .29, 1.5).fill(ink);
   line(g, [x + w * .36, y + h * .48], [x + w * .63, y + h * .57], 0xe0aa74, 4);
+}
+
+export function drawCoin(g: Graphics, x: number, y: number, radius: number, stretch = 1) {
+  const rx = radius * stretch;
+  g.ellipse(x, y + 1, rx, radius).fill(0x90512f)
+    .ellipse(x, y - 1, rx, radius).fill(0xf5bf58)
+    .ellipse(x, y - 1, rx * .66, radius * .68).stroke({ color: 0xffe095, width: 1.5 });
+  line(g, [x, y - radius * .43], [x, y + radius * .27], 0x996239, 1.5);
 }
 
 function drawCounter(g: Graphics, c: Bounds, bell: Bounds) {
@@ -317,7 +326,7 @@ function drawDeskBook(g: Graphics, b: Bounds, phase: State['phase'], open: boole
 
 export function drawRoom(layer: Container, width: number, height: number, state: State, options: ArtOptions = {}) {
   const layout = roomLayout(width, height);
-  const { door, dial, bay, shelves, bell, book, counter, visitor, horizon } = layout;
+  const { door, dial, bay, shelves, bell, book, counter, horizon } = layout;
   const background = new Graphics();
   drawRoomBackground(background, width, height, horizon);
   layer.addChild(background);
@@ -327,9 +336,9 @@ export function drawRoom(layer: Container, width: number, height: number, state:
   layer.addChild(furniture);
   shelves.forEach((b, i) => {
     const shelf = state.shelves[i];
-    drawShelf(furniture, b, shelf, shelf?.goodId ? quantity(state, shelf.goodId) : 0, options.selectedShelf === i, i === 3);
+    const stock = shelf?.goodId ? options.stock?.(shelf.goodId) ?? quantity(state, shelf.goodId) : 0;
+    drawShelf(furniture, b, shelf, stock, options.selectedShelf === i, i === 3);
   });
-  if (state.phase === 'open' && state.customers[state.served]) drawCustomer(furniture, visitor, state.seed, state.served);
   if (state.phase === 'report') furniture.rect(0, 0, width, horizon).fill({ color: 0x292041, alpha: .15 });
   drawCounter(furniture, counter, bell);
   drawDeskBook(furniture, book, state.phase, options.bookOpen ?? false);

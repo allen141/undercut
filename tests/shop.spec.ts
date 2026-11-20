@@ -149,7 +149,8 @@ async function seedGrainNegotiation(page: Page, name: string) {
     state = applyCommand(state, { type: 'finishBuying' });
     state = applyCommand(state, { type: 'shelf', slot: WINDOW_SLOT_INDEX, goodId: 'grain', price: 5 });
     state = applyCommand(state, { type: 'open' });
-    if (applyCommand(state, { type: 'serve' }).pendingNegotiation) break;
+    const negotiation = applyCommand(state, { type: 'serve' }).pendingNegotiation;
+    if (negotiation && negotiation.customerIndex >= 2) break;
   }
   expect(seed).toBeLessThan(1000);
   const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
@@ -163,25 +164,51 @@ async function seedGrainNegotiation(page: Page, name: string) {
   await expectRevision(page, 0);
 }
 
+async function watchVisitorOutcomes(page: Page) {
+  return page.evaluateHandle(() => {
+    const status = document.querySelector('[data-canvas-status]')!;
+    const timeline: { text: string; at: number; visits: number; stock: string }[] = [];
+    new MutationObserver(() => {
+      timeline.push({
+        text: status.textContent ?? '',
+        at: performance.now(),
+        visits: document.querySelectorAll('[data-canvas-ledger] li').length,
+        stock: document.querySelector('[data-canvas-stock]')?.textContent ?? '',
+      });
+    }).observe(status, { childList: true, characterData: true, subtree: true });
+    return timeline;
+  });
+}
+
 async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?: string) {
   const report = page.locator('[data-canvas-report]');
+  const closing = action(page, 'Day’s takings');
   const accept = action(page, 'Accept offer');
+  let timeline = reloadAtOffer ? await watchVisitorOutcomes(page) : undefined;
   await activate(page, 'Open the shop');
   await expect(action(page, 'Serve customer')).toHaveCount(0);
   let negotiations = 0;
   for (;;) {
-    await expect.poll(async () => await report.count() === 1 || await accept.count() === 1 && await accept.isEnabled()).toBe(true);
-    if (await report.count()) break;
+    await expect.poll(async () => await closing.count() === 1 || await accept.count() === 1 && await accept.isEnabled(),
+      { timeout: 25_000 }).toBe(true);
+    if (await closing.count()) break;
     negotiations++;
     expect(negotiations).toBeLessThanOrEqual(2);
     if (reloadAtOffer && negotiations === 1) {
       const saved = await campaignSnapshot(page);
       expect(saved.state.pendingNegotiation).not.toBeNull();
+      const events = await timeline!.jsonValue();
+      const first = events.find(event => event.visits === 1 && event.text.startsWith('Customer 1 of 8.'));
+      const second = events.find(event => event.visits === 2 && event.text.startsWith('Customer 2 of 8.'));
+      expect(first?.text).toMatch(/(?:Sale made|No sale)/);
+      expect(second?.text).toMatch(/(?:Sale made|No sale)/);
+      expect(second!.at - first!.at).toBeGreaterThanOrEqual(1400);
       await page.reload();
       await page.getByRole('button', { name: new RegExp(reloadAtOffer) }).click();
       await expectRevision(page, saved.revision);
       await expect(accept).toBeEnabled();
       expect((await campaignSnapshot(page)).state.pendingNegotiation).toEqual(saved.state.pendingNegotiation);
+      timeline = await watchVisitorOutcomes(page);
     }
     await activate(page, 'Accept offer');
   }
@@ -192,6 +219,18 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
   expect(state.phase).toBe('report');
   expect(state.log).toHaveLength(8);
   expect(state.negotiations).toHaveLength(negotiations);
+  if (timeline) {
+    await expect(page.locator('[data-canvas-status]')).toContainText('closed');
+    const events = await timeline.jsonValue();
+    const negotiatedSale = events.find(event => event.text.includes('Offer accepted.') && event.text.includes('You received'));
+    const last = events.find(event => event.visits === 8 && event.text.startsWith('Customer 8 of 8.'));
+    const finished = events.find(event => event.text.includes('closed.'));
+    expect(negotiatedSale?.stock).toContain(`Grain ${3 - state.customerResults.filter(result =>
+      result.customerIndex < negotiatedSale!.visits && result.goodId === 'grain' && result.price !== null).length}`);
+    expect(last?.text).toMatch(/(?:Sale made|No sale|Offer accepted)/);
+    expect(finished!.at - last!.at).toBeGreaterThanOrEqual(1000);
+    await timeline.dispose();
+  }
   await expect(page.locator('[data-canvas-ledger] li')).toHaveCount(8);
   await expect(report).toContainText(`${state.history.at(-1)?.profit}g`);
   expect(state.history.at(-1)?.profit).toBe(state.revenue - state.costOfSales);
@@ -229,6 +268,7 @@ async function screenshot(page: Page, path: string) {
 
 test('trades a full day and returns with its ledger and remaining stock', async ({ page, account }, info) => {
   test.skip(info.project.name === 'desktop-chromium', 'The desktop Chromium journey covers this flow over two days.');
+  if (info.project.name === 'desktop-firefox') await page.emulateMedia({ reducedMotion: 'no-preference' });
   const errors = captureErrors(page);
   await invite(page, account);
   await createCampaign(page, 'Saffron Counter');
