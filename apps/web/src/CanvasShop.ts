@@ -500,24 +500,22 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         (progressW - 24) * served / CUSTOMERS_PER_DAY, 6), gold, undefined, 1, 3);
     }
 
-    const focusOutcome = activeResult ?? (phase === 'report' ? latestOutcome : undefined);
     if (playback && !playback.revealed && !modal) {
       const body = layout.visitor;
       control(scene, 'hurry-visitor', 'Hurry this visitor', rect(body.x, body.y, body.w, body.h * 1.08), hurryVisitor, { hide: true });
     }
-    if (!modal && (playback || focusOutcome)) {
+    if (!modal && playback) {
       const rightEdge = layout.portrait ? w - margin : layout.bay.x - 13;
       const cardW = Math.min(narrow ? 298 : 370, rightEdge - margin - 6);
       const cardX = Math.max(margin + 6, Math.min(rightEdge - cardW, layout.visitor.x - cardW * .35));
       const cardY = layout.portrait ? layout.page.y + 26 : Math.max(116, layout.visitor.y - 112);
-      const sale = focusOutcome && latest && latest.price !== null ? latest : undefined;
-      const cardAccent = sale ? gold : focusOutcome ? 0xca9986 : 0x9ba99c;
-      const index = playback?.index ?? latest?.customerIndex ?? served - 1;
+      const sale = activeResult && latest && latest.price !== null ? latest : undefined;
+      const cardAccent = sale ? gold : activeResult ? 0xca9986 : 0x9ba99c;
       box(scene, rect(cardX, cardY, cardW, 103), sale ? 0x382a2d : ink, cardAccent, .97, 10);
       box(scene, rect(cardX + 1, cardY + 15, 4, 73), cardAccent, undefined, 1, 2);
-      text(scene, `Customer ${index + 1} of ${CUSTOMERS_PER_DAY}`, cardX + 14, cardY + 17, { size: 12, color: cardAccent });
-      const detail = focusOutcome ? `${focusOutcome.good} · ${focusOutcome.detail}` : 'Considering… Tap or click the visitor to hurry.';
-      text(scene, focusOutcome?.title ?? requestText, cardX + 14, cardY + 45,
+      text(scene, `Customer ${playback.index + 1} of ${CUSTOMERS_PER_DAY}`, cardX + 14, cardY + 17, { size: 12, color: cardAccent });
+      const detail = activeResult ? `${activeResult.good} · ${activeResult.detail}` : 'Considering… Tap or click the visitor to hurry.';
+      text(scene, activeResult?.title ?? requestText, cardX + 14, cardY + 45,
         { size: narrow ? 21 : 24, serif: true, max: cardW - (sale ? 121 : 28) });
       text(scene, detail, cardX + 14, cardY + 79, { size: narrow ? 13 : 14, max: cardW - (sale ? 115 : 28) });
       if (sale) {

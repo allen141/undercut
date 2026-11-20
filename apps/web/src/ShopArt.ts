@@ -20,15 +20,18 @@ function glow(x: number, y: number, radius: number, color: number) {
   return light;
 }
 
-function drawRoomBackground(layer: Container, art: ShopTextures, width: number, height: number, horizon: number) {
-  layer.addChild(
-    placeSprite(art['room-wall'], { x: 0, y: 52, w: width, h: horizon - 52 }),
-    placeSprite(art['room-floor'], { x: 0, y: horizon, w: width, h: height - horizon }),
-  );
+function drawRoomBackground(layer: Container, art: ShopTextures, width: number, height: number, horizon: number, portrait: boolean) {
+  const floorBounds = { x: 0, y: horizon, w: width, h: height - horizon };
+  const floor = portrait ? fitSprite(art['room-floor-portrait'], floorBounds, 'cover', 0)
+    : placeSprite(art['room-floor'], floorBounds);
+  layer.addChild(placeSprite(art['room-wall'], { x: 0, y: 52, w: width, h: horizon - 52 }), floor);
+  if (portrait) {
+    const mask = new Graphics().rect(0, horizon, width, floorBounds.h).fill(0xffffff);
+    floor.mask = mask;
+    layer.addChild(mask);
+  }
   layer.addChild(new Graphics().rect(0, 0, width, 54).fill(0x2f2031));
-  const floor = new Graphics();
-  floor.rect(0, horizon, width, height - horizon).fill({ color: 0x522c26, alpha: .18 });
-  layer.addChild(floor);
+  layer.addChild(new Graphics().rect(0, horizon, width, floorBounds.h).fill({ color: 0x522c26, alpha: .18 }));
 }
 
 function drawPortal(layer: Container, art: ShopTextures, bay: Bounds, townId: string | null) {
@@ -117,7 +120,7 @@ export function setCoin(sprite: Sprite, x: number, y: number, radius: number, st
 export function drawRoom(layer: Container, foreground: Container, art: ShopTextures, width: number, height: number,
   state: State, options: ArtOptions = {}) {
   const { portrait, dial, bay, shelves, bell, book, counter, horizon } = roomLayout(width, height);
-  drawRoomBackground(layer, art, width, height, horizon);
+  drawRoomBackground(layer, art, width, height, horizon, portrait);
   const townId = options.townId ?? state.townId;
   drawPortal(layer, art, bay, townId);
   drawDial(layer, art, dial, townId);
