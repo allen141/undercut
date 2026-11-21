@@ -13,7 +13,7 @@ The existing game follows this shop loop.
 3. Open the shop and serve eight customers. Sales depend on demand, price, and availability.
 4. Close the shop and review revenue, first-in-first-out cost of goods sold, profit, and wholesale spending. Start another day with the remaining inventory and gold.
 
-The campaign ledger remains available throughout play and opens at the start of each day. Its inventory, performance, market history, event log, and newspaper pages read from an optional append-only journal stored in the campaign snapshot.
+The persistent campaign ledger remains available through a Ledger button throughout play. Its inventory, performance, market history, event log, and newspaper archive read from an optional append-only journal stored in the campaign snapshot. Phase-specific books, including the morning newspaper and Route Atlas, open at their stage transitions.
 
 The shop works on desktop and portrait mobile. The active shop fills the viewport with a PixiJS WebGL canvas. The door dial, market, shelves, counter, and ledger carry the day’s actions. Keyboard and assistive technology can reach the canvas controls through semantic controls. Account forms and campaign selection use native browser controls.
 

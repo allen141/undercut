@@ -89,9 +89,6 @@ export function Game(props: GameProps) {
 
   const { campaign, busy, online, pending, error } = props;
   const state = campaign.state;
-  useEffect(() => {
-    if (state.phase === 'travel') openLedger('inventory');
-  }, [state.day, state.phase, openLedger]);
   const served = business?.served ?? state.served;
   const ledger = state.log.slice(0, served);
   const unrevealed = business ? state.customerResults.filter(result => result.customerIndex >= served && result.price !== null) : [];

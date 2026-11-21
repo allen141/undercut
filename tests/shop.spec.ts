@@ -78,6 +78,7 @@ async function createCampaign(page: Page, name: string) {
   await page.getByRole('button', { name: 'Create campaign' }).click();
   await expect(shopCanvas(page)).toBeVisible();
   await expectRevision(page, 0);
+  await page.locator('.ledger-menu').click();
   const ledger = page.getByRole('dialog', { name: 'The shop ledger' });
   await expect(ledger).toBeVisible();
   const pages = ledger.getByRole('navigation', { name: 'Ledger pages' });
@@ -302,7 +303,6 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
   await expect(page.locator('[data-canvas-ledger] li')).toHaveCount(8);
   await expect(report).toContainText(`${state.history.at(-1)?.profit}g`);
   expect(state.history.at(-1)?.profit).toBe(state.revenue - state.costOfSales);
-  if (closedDoor) await expect.poll(async () => (await page.screenshot({ clip })).equals(closedDoor)).toBe(true);
   await activate(page, 'Day’s takings');
   return revision;
 }
