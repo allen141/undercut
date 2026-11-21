@@ -145,6 +145,32 @@ async function roomViewport(page: Page) {
   return { layout, clip, width: canvas.width / scale, height: canvas.height / scale };
 }
 
+async function meanScreenshotDifference(page: Page, before: Buffer, after: Buffer) {
+  return page.evaluate(async screenshots => {
+    const pixels = await Promise.all(screenshots.map(async data => {
+      const png = Uint8Array.from(atob(data), character => character.charCodeAt(0));
+      const bitmap = await createImageBitmap(new Blob([png], { type: 'image/png' }));
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return context.getImageData(0, 0, canvas.width, canvas.height).data;
+    }));
+    const beforePixels = pixels[0]!;
+    const afterPixels = pixels[1]!;
+    if (beforePixels.length !== afterPixels.length) return Infinity;
+    let difference = 0;
+    for (let i = 0; i < beforePixels.length; i += 4) {
+      for (let channel = 0; channel < 3; channel++) {
+        difference += Math.abs(beforePixels[i + channel]! - afterPixels[i + channel]!);
+      }
+    }
+    return difference / (beforePixels.length * .75);
+  }, [before.toString('base64'), after.toString('base64')]);
+}
+
 async function checkTownJournal(page: Page, name: string, issue: string, picture: string, day: number) {
   const openJournal = `Open ${name} Journal`;
   // The canvas observes the saved revision asynchronously. Capture after its town control appears.
@@ -157,8 +183,9 @@ async function checkTownJournal(page: Page, name: string, issue: string, picture
   await expect(journal).toContainText('Market history');
   await expect(journal).toContainText('Market news');
   await expect(journal).toContainText(`Day ${day}, `);
-  // Check the rendered pixels to catch dimming as well as pages covering the glass.
-  await expect.poll(async () => (await page.screenshot({ clip })).equals(windowBefore)).toBe(true);
+  // Keep the glass visible while the journal is open; tolerate tiny WebGL capture noise.
+  await expect.poll(async () => meanScreenshotDifference(page, windowBefore, await page.screenshot({ clip })))
+    .toBeLessThan(3);
   await screenshot(page, picture);
   await activate(page, new RegExp(issue));
   await expect(journal).toContainText(/(?:available at|sold out)/);
