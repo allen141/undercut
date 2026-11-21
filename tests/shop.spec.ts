@@ -84,6 +84,7 @@ async function createCampaign(page: Page, name: string) {
   await page.getByRole('button', { name: 'Create campaign' }).click();
   await expect(shopCanvas(page)).toBeVisible();
   await expectRevision(page, 0);
+  await page.locator('.ledger-menu').click();
   const ledger = page.getByRole('dialog', { name: 'The shop ledger' });
   await expect(ledger).toBeVisible();
   const pages = ledger.getByRole('navigation', { name: 'Ledger pages' });
@@ -239,7 +240,6 @@ async function seedGrainNegotiation(page: Page, name: string) {
   await page.reload();
   await page.getByRole('button', { name: new RegExp(name) }).click();
   await expectRevision(page, 0);
-  await dismissDayLedger(page);
 }
 
 async function watchVisitorOutcomes(page: Page) {
@@ -489,7 +489,6 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await activate(page, 'Day’s takings');
   await activate(page, 'Begin day 2');
   await expectRevision(page, closingRevision + 1);
-  await dismissDayLedger(page);
   await expect(page.getByRole('region', { name: 'The Wandering Gazette' })).toContainText('Morning edition · Day 2');
   await activate(page, 'Choose today’s town');
   await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 2');
@@ -546,7 +545,6 @@ test('fits and accepts touch within a zoomed Android viewport', async ({ page, a
   expect(zoomed.zoom).toBeCloseTo(1.7, 2);
   expect(zoomed.deviceRatio).toBeGreaterThan(2);
   expect(zoomed.backingRatio).toBeCloseTo(2, 1);
-  await dismissDayLedger(page);
   await chooseTown(page, 'Meadow');
   await expectRevision(page, 1);
   await visit(page, 'Mill Yard');
@@ -623,7 +621,6 @@ test('docks the Accounts Book across a phone running in desktop viewport mode', 
   await page.screenshot({ path: info.outputPath('accounts-book-desktop-mode.png') });
   await activate(page, 'Begin day 10');
   await expectRevision(page, 1);
-  await dismissDayLedger(page);
   await expect(page.getByRole('region', { name: 'The Wandering Gazette' })).toContainText('Morning edition · Day 10');
   await activate(page, 'Choose today’s town');
   await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 10');
@@ -714,7 +711,6 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
 
   await activate(page, 'Begin day 2');
   await expectRevision(page, meadowClosing + 1);
-  await dismissDayLedger(page);
   await chooseTown(page, 'Harbor');
   await expectRevision(page, meadowClosing + 2);
   await visit(page, 'Dockside Lots');
