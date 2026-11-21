@@ -1,34 +1,51 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import idleReadMapSheet from './demo-assets/traveler/idle_read_map_sheet.png';
+import walkReadMapSheet from './demo-assets/traveler/walk_read_map_sheet.png';
+import walkSheet from './demo-assets/traveler/walk_sheet.png';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import './low-poly-shop.css';
 
-type CharacterRig = {
+type ShopkeeperRig = {
   root: THREE.Group;
   torso: THREE.Group;
-  head: THREE.Group;
   rightArm: THREE.Group;
-  leftArm: THREE.Group;
-  rightLeg: THREE.Group;
-  leftLeg: THREE.Group;
+};
+
+type TravelerAnimation = 'idle_read_map' | 'walk_read_map' | 'walk';
+
+type TravelerRig = {
+  root: THREE.Group;
+  sprite: THREE.Sprite;
+  setAnimation: (name: TravelerAnimation, elapsed: number) => void;
+};
+
+type SpriteClip = {
+  texture: THREE.Texture;
+  frameCount: number;
+  fps: number;
+  columns: number;
+  rows: number;
 };
 
 type SceneRig = {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
-  customer: CharacterRig;
-  merchant: CharacterRig;
+  customer: TravelerRig;
+  merchant: ShopkeeperRig;
   compass: THREE.Group;
   geometries: THREE.BufferGeometry[];
   materials: THREE.Material[];
+  textures: THREE.Texture[];
 };
 
 function createShopScene(): SceneRig {
   const geometries: THREE.BufferGeometry[] = [];
   const materials: THREE.Material[] = [];
+  const textures: THREE.Texture[] = [];
   const material = (color: number, roughness = 1, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) => {
     const result = new THREE.MeshStandardMaterial({ color, roughness, flatShading: true, ...extra });
     materials.push(result);
@@ -243,7 +260,7 @@ function createShopScene(): SceneRig {
     scene.add(light);
   }
 
-  const makeCharacter = (merchant = false): CharacterRig => {
+  const makeShopkeeper = (): ShopkeeperRig => {
     const root = new THREE.Group();
     const torso = new THREE.Group();
     const head = new THREE.Group();
@@ -251,20 +268,20 @@ function createShopScene(): SceneRig {
     const leftArm = new THREE.Group();
     const rightLeg = new THREE.Group();
     const leftLeg = new THREE.Group();
-    const coat = merchant ? mat.rust : mat.teal;
-    const skin = merchant ? mat.skinLight : mat.skin;
+    const coat = mat.rust;
+    const skin = mat.skinLight;
     scene.add(root);
     root.add(torso, rightLeg, leftLeg);
     torso.position.set(0, .92, 0);
     box(torso, [.72, .92, .46], [0, .40, 0], coat);
-    box(torso, [.34, .55, .06], [0, .36, .25], merchant ? mat.cream : mat.blue);
-    cylinder(torso, .40, .43, .17, [0, .83, 0], merchant ? mat.woodDark : mat.gold, 6);
+    box(torso, [.34, .55, .06], [0, .36, .25], mat.cream);
+    cylinder(torso, .40, .43, .17, [0, .83, 0], mat.woodDark, 6);
     torso.add(head, rightArm, leftArm);
     head.position.set(0, .98, .02);
     poly(head, .34, [0, .05, 0], skin);
-    poly(head, .32, [0, .27, -.025], merchant ? mat.white : mat.hair);
-    poly(head, .15, [-.22, .16, .08], merchant ? mat.white : mat.hairLight);
-    poly(head, .15, [.21, .12, .12], merchant ? mat.white : mat.hair);
+    poly(head, .32, [0, .27, -.025], mat.white);
+    poly(head, .15, [-.22, .16, .08], mat.white);
+    poly(head, .15, [.21, .12, .12], mat.hairLight);
     for (const eyeX of [-.115, .115]) {
       const eyeGeometry = new THREE.SphereGeometry(.032, 5, 4);
       geometries.push(eyeGeometry);
@@ -273,17 +290,10 @@ function createShopScene(): SceneRig {
       head.add(eye);
     }
     poly(head, .06, [0, -.045, .32], skin);
-    if (merchant) {
-      poly(head, .21, [0, -.18, .21], mat.white);
-      poly(head, .30, [0, .39, -.02], mat.hairLight);
-      box(torso, [.54, .63, .08], [0, -.02, .28], mat.cream);
-      box(torso, [.12, .16, .08], [0, .23, .34], mat.woodLight);
-    } else {
-      // Scarf and satchel separate the customer silhouette from the warm shop palette.
-      box(torso, [.18, .48, .11], [-.29, .47, -.15], mat.gold).rotation.z = -.28;
-      box(torso, [.40, .45, .24], [-.43, -.03, -.18], mat.woodDark);
-      box(torso, [.34, .06, .04], [-.43, -.02, -.045], mat.woodLight);
-    }
+    poly(head, .21, [0, -.18, .21], mat.white);
+    poly(head, .30, [0, .39, -.02], mat.hairLight);
+    box(torso, [.54, .63, .08], [0, -.02, .28], mat.cream);
+    box(torso, [.12, .16, .08], [0, .23, .34], mat.woodLight);
     const attachArm = (arm: THREE.Group, side: number) => {
       arm.position.set(side * .41, .69, .01);
       torso.add(arm);
@@ -291,7 +301,7 @@ function createShopScene(): SceneRig {
       const forearm = new THREE.Group();
       forearm.position.set(0, -.43, 0);
       arm.add(forearm);
-      cylinder(forearm, .12, .15, .40, [0, -.19, .01], merchant ? mat.cream : coat, 5);
+      cylinder(forearm, .12, .15, .40, [0, -.19, .01], mat.cream, 5);
       poly(forearm, .13, [0, -.42, .04], skin);
     };
     attachArm(rightArm, 1);
@@ -299,22 +309,83 @@ function createShopScene(): SceneRig {
     const attachLeg = (leg: THREE.Group, side: number) => {
       leg.position.set(side * .20, .80, 0);
       root.add(leg);
-      cylinder(leg, .15, .18, .44, [0, -.22, 0], merchant ? mat.woodDark : mat.blue, 5);
+      cylinder(leg, .15, .18, .44, [0, -.22, 0], mat.woodDark, 5);
       const shin = new THREE.Group();
       shin.position.set(0, -.42, 0);
       leg.add(shin);
-      cylinder(shin, .13, .15, .42, [0, -.20, 0], merchant ? mat.woodDark : mat.blue, 5);
+      cylinder(shin, .13, .15, .42, [0, -.20, 0], mat.woodDark, 5);
       box(shin, [.28, .15, .40], [0, -.42, .09], mat.woodDark);
     };
     attachLeg(rightLeg, 1);
     attachLeg(leftLeg, -1);
-    return { root, torso, head, rightArm, leftArm, rightLeg, leftLeg };
+    return { root, torso, rightArm };
   };
 
-  const customer = makeCharacter();
+  const makeTravelerSprite = (): TravelerRig => {
+    const sheet = (url: string, fps: number): SpriteClip => {
+      const texture = new THREE.TextureLoader().load(url);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.magFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.generateMipmaps = true;
+      texture.repeat.set(1 / 3, 1 / 2);
+      textures.push(texture);
+      return { texture, frameCount: 6, fps, columns: 3, rows: 2 };
+    };
+    const clips: Record<TravelerAnimation, SpriteClip> = {
+      idle_read_map: sheet(idleReadMapSheet, 1000 / 240),
+      walk_read_map: sheet(walkReadMapSheet, 1000 / 160),
+      walk: sheet(walkSheet, 1000 / 150),
+    };
+    const root = new THREE.Group();
+    const shadowGeometry = new THREE.CircleGeometry(.50, 18);
+    geometries.push(shadowGeometry);
+    const shadowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x172125, transparent: true, opacity: .28, depthWrite: false,
+    });
+    materials.push(shadowMaterial);
+    const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.set(0, .065, 0);
+    shadow.scale.set(1.15, .62, 1);
+    root.add(shadow);
+
+    const spriteMaterial = new THREE.SpriteMaterial({
+      map: clips.idle_read_map.texture,
+      color: 0xffffff,
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    materials.push(spriteMaterial);
+    const sprite = new THREE.Sprite(spriteMaterial);
+    sprite.center.set(.5, 0);
+    sprite.scale.set(2.55, 2.55, 1);
+    root.add(sprite);
+    scene.add(root);
+
+    let activeAnimation: TravelerAnimation = 'idle_read_map';
+    const setAnimation = (name: TravelerAnimation, elapsed: number) => {
+      const clip = clips[name];
+      if (name !== activeAnimation) {
+        activeAnimation = name;
+        spriteMaterial.map = clip.texture;
+        spriteMaterial.needsUpdate = true;
+      }
+      const frame = Math.floor(Math.max(0, elapsed) * clip.fps) % clip.frameCount;
+      const column = frame % clip.columns;
+      const row = Math.floor(frame / clip.columns);
+      clip.texture.offset.set(column / clip.columns, 1 - (row + 1) / clip.rows);
+    };
+    setAnimation('idle_read_map', 0);
+    return { root, sprite, setAnimation };
+  };
+
+  const customer = makeTravelerSprite();
   customer.root.position.set(0, 0, .35);
-  customer.root.rotation.y = 1.25;
-  const merchant = makeCharacter(true);
+  const merchant = makeShopkeeper();
   merchant.root.position.set(1.65, .18, -2.65);
   merchant.root.rotation.y = .22;
   merchant.root.scale.setScalar(1.08);
@@ -332,7 +403,7 @@ function createShopScene(): SceneRig {
   compass.add(needle);
   compass.position.set(.62, 1.48, -2.24);
 
-  return { scene, camera, customer, merchant, compass, geometries, materials };
+  return { scene, camera, customer, merchant, compass, geometries, materials, textures };
 }
 
 const smooth = (from: number, to: number, t: number) => {
@@ -411,22 +482,12 @@ void main() {
         ? THREE.MathUtils.lerp(-4.15, .02, arrival) : THREE.MathUtils.lerp(.02, 4.8, departure);
       customer.root.position.z = t < 0 ? .35 : t < 7.7
         ? THREE.MathUtils.lerp(1.8, .35, arrival) : THREE.MathUtils.lerp(.35, -3.7, departure);
-      customer.root.rotation.y = t >= 0 && t < 2.3 ? 1.05 : t >= 7.7 ? Math.PI * .75 : 1.25;
-      const walking = t >= 0 && t < 2.3 ? 1 - smooth(1.7, 2.3, t)
-        : t >= 7.7 && t < 9.4 ? 1 - smooth(8.8, 9.4, t) : 0;
-      const gait = reduced ? 0 : seconds * 8.5;
-      customer.rightLeg.rotation.x = Math.sin(gait) * .48 * walking;
-      customer.leftLeg.rotation.x = -Math.sin(gait) * .48 * walking;
-      customer.leftArm.rotation.x = -Math.sin(gait) * .26 * walking;
-      const inspect = smooth(2.3, 3.2, t) * (1 - smooth(4.4, 5.1, t));
-      const ask = smooth(4.25, 4.75, t) * (1 - smooth(5.6, 6.25, t));
-      const reach = smooth(5.55, 6.3, t) * (1 - smooth(6.9, 7.6, t));
-      customer.torso.rotation.x = -.10 * inspect - .04 * reach;
-      customer.head.rotation.x = -.10 * inspect;
-      customer.head.rotation.y = reduced ? 0 : Math.sin(seconds * 1.2) * .035;
-      customer.rightArm.rotation.x = .12 * inspect - .45 * ask + 1.25 * reach;
-      customer.rightArm.rotation.z = -.14 * ask;
-      customer.torso.position.y = .92 + (reduced ? 0 : Math.sin(seconds * 2.2) * .025);
+      const entering = t >= 0 && t < 2.3;
+      const leaving = t >= 7.7 && t < 9.4;
+      const travelerAnimation: TravelerAnimation = entering ? 'walk_read_map'
+        : leaving ? 'walk' : 'idle_read_map';
+      const animationTime = entering ? t : leaving ? t - 7.7 : t < 0 ? seconds : t - 2.3;
+      customer.setAnimation(travelerAnimation, animationTime);
       const merchantGreet = smooth(4.5, 5.3, t) * (1 - smooth(6.1, 6.8, t));
       rig.merchant.rightArm.rotation.x = .15 + merchantGreet * .96;
       rig.merchant.torso.position.y = .92 + (reduced ? 0 : Math.sin(seconds * 1.7 + 1) * .02);
@@ -466,6 +527,7 @@ void main() {
       renderer.domElement.remove();
       rig.geometries.forEach(geometry => geometry.dispose());
       rig.materials.forEach(surface => surface.dispose());
+      rig.textures.forEach(texture => texture.dispose());
     };
   }, []);
 
@@ -482,7 +544,7 @@ void main() {
       <div>
         <span className="low-poly-kicker">Undercut · WebGL study</span>
         <h1>Harbor shop</h1>
-        <p>Faceted 3D room · real-time lighting · articulated customer</p>
+        <p>Low-poly 3D room · animated traveler sprite · real-time lighting</p>
       </div>
       <button className="low-poly-play" type="button" onClick={replay} disabled={playing}>
         {playing ? 'Visit in progress…' : 'Play customer visit'}
@@ -492,9 +554,9 @@ void main() {
       <span className="low-poly-status-light" />{status}
     </div>
     <aside className="low-poly-rig-note">
-      <strong>Customer rig</strong>
-      <span>Head · torso · shoulders · elbows · hips · knees</span>
-      <span>Procedural walk, inspection, gesture and handoff</span>
+      <strong>Traveler sprite</strong>
+      <span>Right-facing 512px transparent sprite sheets</span>
+      <span>Idle with map · walk with map · walk</span>
     </aside>
     <footer className="low-poly-footer">Prototype scene · Three.js WebGL · faceted geometry · real-time shadows</footer>
   </main>;
