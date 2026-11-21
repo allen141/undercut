@@ -32,8 +32,30 @@
   pointer-events: none;
 }
 .low-poly-header > div,
-.low-poly-play {
+.low-poly-play,
+.low-poly-controls {
   pointer-events: auto;
+}
+.low-poly-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: min(66vw, 780px);
+}
+.low-poly-controls button {
+  min-height: 40px;
+  padding: 7px 11px;
+  border-color: rgb(212 169 109 / 55%);
+  background: rgb(28 39 42 / 86%);
+  color: #f0e5ce;
+  font-size: .78rem;
+  box-shadow: 0 5px 20px rgb(15 23 25 / 22%);
+  backdrop-filter: blur(8px);
+}
+.low-poly-controls button:hover:not(:disabled) {
+  border-color: #f3d19b;
+  background: rgb(72 55 42 / 94%);
 }
 .low-poly-kicker {
   display: block;
@@ -127,6 +149,10 @@
   z-index: 2;
   left: clamp(20px, 4vw, 54px);
   bottom: 14px;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
   color: rgb(223 229 216 / 68%);
   font-size: .62rem;
   letter-spacing: .09em;
@@ -139,6 +165,16 @@
     flex-direction: column;
     gap: 14px;
     padding: 19px;
+  }
+  .low-poly-controls {
+    justify-content: flex-start;
+    max-width: 100%;
+    gap: 6px;
+  }
+  .low-poly-controls button {
+    min-height: 36px;
+    padding: 6px 9px;
+    font-size: .7rem;
   }
   .low-poly-header p {
     margin-top: 7px;
