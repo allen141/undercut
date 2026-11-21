@@ -253,7 +253,11 @@ test('loading an older campaign upgrades the response and leaves persistence to 
   assert.equal(response.statusCode, 200, response.body);
   const updated = response.json<{ revision: number; state: State }>();
   assert.equal(updated.revision, revision + 1);
-  assert.deepEqual(updated.state, { ...campaign.state, buyingComplete: true, journal: [] });
+  assert.deepEqual(updated.state, {
+    ...campaign.state,
+    buyingComplete: true,
+    journal: [{ day: 3, type: 'buyingFinished' }],
+  });
   const [afterCommand] = await db.select().from(campaigns).where(eq(campaigns.id, id));
   assert.equal(afterCommand.revision, updated.revision);
   assert.deepEqual(afterCommand.state, updated.state);
