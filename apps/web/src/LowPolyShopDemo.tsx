@@ -50,7 +50,7 @@ const harborArtUrls = import.meta.glob('./demo-assets/harbor/art/**/*.png', {
   query: '?url',
   import: 'default',
 }) as Record<string, string>;
-const travelerFrame = { x: 545, y: 348, width: 246, height: 246 } as const;
+const travelerFrame = { x: 545, y: 348, width: 320, height: 320 } as const;
 
 async function createShopScene(): Promise<SceneRig> {
   const [width, height] = manifest.authored_size;
@@ -139,7 +139,7 @@ async function createShopScene(): Promise<SceneRig> {
     });
     materials.push(material);
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x + w / 2 - width / 2, height / 2 - y - h / 2, 0);
+    mesh.position.set(x + w / 2 - width / 2, height / 2 - y - h / 2, zOrder * .01);
     mesh.renderOrder = zOrder;
     mesh.frustumCulled = false;
     mesh.name = id;
@@ -185,7 +185,7 @@ async function createShopScene(): Promise<SceneRig> {
   const shopkeeperGeometry = new THREE.PlaneGeometry(sw, sh);
   geometries.push(shopkeeperGeometry);
   const shopkeeper = new THREE.Mesh(shopkeeperGeometry, shopkeeperMaterial);
-  shopkeeper.position.set(sx + sw / 2 - width / 2, height / 2 - sy - sh / 2, 0);
+  shopkeeper.position.set(sx + sw / 2 - width / 2, height / 2 - sy - sh / 2, shopkeeperObject.z_order * .01);
   shopkeeper.renderOrder = shopkeeperObject.z_order;
   shopkeeper.frustumCulled = false;
   shopkeeper.name = 'shopkeeper';
@@ -225,7 +225,7 @@ async function createShopScene(): Promise<SceneRig> {
   scene.add(customer);
   const setTravelerX = (x: number) => {
     const { y, width: w, height: h } = travelerFrame;
-    customer.position.set(x + w / 2 - width / 2, height / 2 - y - h / 2, 0);
+    customer.position.set(x + w / 2 - width / 2, height / 2 - y - h / 2, customer.renderOrder * .01);
     customer.userData.authoredRect = [x, y, w, h];
   };
   setTravelerX(travelerFrame.x);
@@ -256,7 +256,7 @@ async function createShopScene(): Promise<SceneRig> {
     }
     const localTime = Math.max(0, elapsed - shopkeeperAnimationStartedAt);
     const rawFrame = Math.floor(localTime * clip.fps);
-    const frame = clip.loop ? rawFrame % clip.frames.length : Math.min(rawFrame, clip.frames.length - 1);
+    const frame = name === 'idle' ? 0 : clip.loop ? rawFrame % clip.frames.length : Math.min(rawFrame, clip.frames.length - 1);
     shopkeeperMaterial.map = textureMap.get(clip.frames[frame]) ?? null;
     shopkeeperMaterial.needsUpdate = true;
   };

@@ -1,6 +1,6 @@
 {
   "schema": "undercut.harbor_scene.v1",
-  "name": "Undercut \u2014 Harbor Shop (desktop camera-lock starter)",
+  "name": "Undercut — Harbor Shop (desktop camera-lock starter)",
   "authored_size": [
     1448,
     1086
@@ -24,9 +24,9 @@
       "asset": "red_rug",
       "rect": [
         460,
-        587,
+        700,
         730,
-        270
+        236
       ],
       "z_order": 5,
       "visible": true,
@@ -70,10 +70,10 @@
       "id": "closed_door",
       "asset": "door_closed",
       "rect": [
-        1180,
-        161,
-        239,
-        433
+        1148,
+        140,
+        270,
+        420
       ],
       "z_order": 12,
       "visible": true,
@@ -89,10 +89,10 @@
       "id": "open_door",
       "asset": "door_open",
       "rect": [
-        1180,
-        161,
-        239,
-        433
+        1148,
+        140,
+        270,
+        420
       ],
       "z_order": 12,
       "visible": false,
@@ -249,8 +249,8 @@
       "id": "shelf_bottle_teal",
       "asset": "bottle_teal_tall",
       "rect": [
-        305,
-        236,
+        295,
+        199,
         59,
         110
       ],
@@ -268,8 +268,8 @@
       "id": "shelf_bottle_amber",
       "asset": "bottle_amber",
       "rect": [
-        282,
-        299,
+        388,
+        213,
         59,
         85
       ],
@@ -287,8 +287,8 @@
       "id": "shelf_gem",
       "asset": "gem_blue",
       "rect": [
-        234,
-        369,
+        215,
+        329,
         112,
         95
       ],
@@ -306,8 +306,8 @@
       "id": "shelf_chest",
       "asset": "treasure_chest",
       "rect": [
-        312,
-        425,
+        370,
+        420,
         99,
         84
       ],
@@ -326,7 +326,7 @@
       "asset": "ceramic_jar",
       "rect": [
         260,
-        484,
+        427,
         93,
         91
       ],
@@ -344,8 +344,8 @@
       "id": "shelf_rope",
       "asset": "rope_coil_large",
       "rect": [
-        223,
-        535,
+        145,
+        451,
         104,
         80
       ],
@@ -424,8 +424,8 @@
       "id": "shell",
       "asset": "conch_shell",
       "rect": [
-        672,
-        566,
+        645,
+        580,
         125,
         97
       ],
@@ -443,8 +443,8 @@
       "id": "boat",
       "asset": "toy_sailboat",
       "rect": [
-        779,
-        505,
+        785,
+        527,
         118,
         151
       ],
@@ -462,8 +462,8 @@
       "id": "table_bottle",
       "asset": "bottle_teal_short",
       "rect": [
-        907,
-        560,
+        918,
+        578,
         60,
         100
       ],
