@@ -92,6 +92,14 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
   });
   const background = new Graphics().rect(0, 0, width, height).fill(0x1c292d);
   layer.addChild(background, placeSprite(art.harbor[harborScene.background], layout.scene));
+  const townId = options.townId ?? state.townId;
+  const townWindowTints: Record<string, number> = { meadow: 0x9fbf82, forge: 0xd89b65, harbor: 0x76adbf };
+  const townTint = townId ? townWindowTints[townId] : undefined;
+  if (townTint !== undefined) {
+    const window = layout.sceneWindow;
+    layer.addChild(new Graphics().rect(window.x, window.y, window.w, window.h)
+      .fill({ color: townTint, alpha: .17 }));
+  }
 
   const lanternLight = (rect: [number, number, number, number], radius: number) => {
     const bounds = toScreen(rect);
@@ -127,7 +135,7 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
   }
   if (state.phase !== 'travel') drawDial(layer, art, layout.dial, options.townId ?? state.townId);
 
-  layout.shelves.forEach((bounds, index) => {
+  layout.sceneShelves.forEach((bounds, index) => {
     const shelf = state.shelves[index];
     const selected = options.selectedShelf === index;
     if (selected) {
