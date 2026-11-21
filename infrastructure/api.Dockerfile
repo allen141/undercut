@@ -6,7 +6,7 @@ COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/game-core/package.json packages/game-core/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY apps/api/package.json apps/api/package.json
-RUN pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store && rm -rf /tmp/pnpm-store
+RUN pnpm install --prod --frozen-lockfile --store-dir /tmp/pnpm-store && rm -rf /tmp/pnpm-store
 FROM dependencies
 ARG BUILD_VERSION=local
 LABEL org.opencontainers.image.source=https://github.com/allen141/undercut \
