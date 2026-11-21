@@ -93,12 +93,13 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
   const background = new Graphics().rect(0, 0, width, height).fill(0x1c292d);
   layer.addChild(background, placeSprite(art.harbor[harborScene.background], layout.scene));
   const townId = options.townId ?? state.townId;
-  const townWindowTints: Record<string, number> = { meadow: 0x9fbf82, forge: 0xd89b65, harbor: 0x76adbf };
-  const townTint = townId ? townWindowTints[townId] : undefined;
-  if (townTint !== undefined) {
+  if (townId === 'meadow' || townId === 'forge') {
+    const exterior = townId === 'meadow' ? art.windowExteriors.meadow : art.windowExteriors.forge;
+    layer.addChild(placeSprite(exterior, toScreen([415, 20, 680, 285])));
+  } else if (townId === 'harbor') {
     const window = layout.sceneWindow;
     layer.addChild(new Graphics().rect(window.x, window.y, window.w, window.h)
-      .fill({ color: townTint, alpha: .17 }));
+      .fill({ color: 0x76adbf, alpha: .17 }));
   }
 
   const lanternLight = (rect: [number, number, number, number], radius: number) => {

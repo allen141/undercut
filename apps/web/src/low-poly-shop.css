@@ -53,6 +53,34 @@
   box-shadow: 0 5px 20px rgb(15 23 25 / 22%);
   backdrop-filter: blur(8px);
 }
+.low-poly-window-view {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 7px 11px;
+  border: 1px solid rgb(212 169 109 / 55%);
+  border-radius: 7px;
+  background: rgb(28 39 42 / 86%);
+  color: #c4d0ca;
+  font-size: .78rem;
+  box-shadow: 0 5px 20px rgb(15 23 25 / 22%);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+.low-poly-window-view select {
+  max-width: 112px;
+  padding: 2px 3px;
+  border: 0;
+  background: transparent;
+  color: #f0e5ce;
+  font: inherit;
+  cursor: pointer;
+}
+.low-poly-window-view option {
+  background: #1c272a;
+  color: #f0e5ce;
+}
 .low-poly-controls button:hover:not(:disabled) {
   border-color: #f3d19b;
   background: rgb(72 55 42 / 94%);
@@ -172,6 +200,11 @@
     gap: 6px;
   }
   .low-poly-controls button {
+    min-height: 36px;
+    padding: 6px 9px;
+    font-size: .7rem;
+  }
+  .low-poly-window-view {
     min-height: 36px;
     padding: 6px 9px;
     font-size: .7rem;

@@ -4,6 +4,8 @@ import idleReadMapSheet from './demo-assets/traveler/idle_read_map_sheet.png';
 import walkReadMapSheet from './demo-assets/traveler/walk_read_map_sheet.png';
 import walkSheet from './demo-assets/traveler/walk_sheet.png';
 import harborSceneData from './demo-assets/harbor/scene/harbor_shop.scene.json';
+import meadowWindowExteriorUrl from './demo-assets/window-exteriors/meadows.png';
+import foundryWindowExteriorUrl from './demo-assets/window-exteriors/foundry.png';
 import './low-poly-shop.css';
 
 type HarborObject = {
@@ -29,6 +31,7 @@ type HarborManifest = {
 
 type ShopkeeperAnimation = keyof HarborManifest['animations']['shopkeeper'];
 type TravelerAnimation = 'idle_read_map' | 'walk_read_map' | 'walk';
+type WindowView = 'harbor' | 'meadows' | 'foundry';
 type TravelerClip = { texture: THREE.Texture; fps: number };
 
 type SceneRig = {
@@ -38,6 +41,7 @@ type SceneRig = {
   customer: THREE.Mesh;
   setDoorOpen: (open: boolean) => void;
   setLanternGlow: (enabled: boolean) => void;
+  setWindowView: (view: WindowView) => void;
   setShopkeeperAnimation: (name: ShopkeeperAnimation, elapsed: number) => void;
   setTravelerAnimation: (name: TravelerAnimation, elapsed: number) => void;
   setTravelerX: (x: number) => void;
@@ -100,16 +104,30 @@ async function createShopScene(): Promise<SceneRig> {
     textures.set(url, texture);
     return texture;
   });
+  const windowExteriorUrls = { meadows: meadowWindowExteriorUrl, foundry: foundryWindowExteriorUrl };
+  const windowExteriorPromises = Object.entries(windowExteriorUrls).map(async ([view, url]) => {
+    const texture = await loader.loadAsync(url);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    textures.set(url, texture);
+    return [view, texture] as const;
+  });
   const kitPaths = new Set<string>([
     manifest.background,
     ...Object.values(manifest.assets).map(asset => asset.file),
     ...shopkeeperPaths,
   ]);
-  const [kitTextures, travelerTextures] = await Promise.all([
+  const [kitTextures, travelerTextures, windowExteriorEntries] = await Promise.all([
     Promise.all([...kitPaths].map(async path => [path, await loadTexture(path)] as const)),
     Promise.all(travelerPromises),
+    Promise.all(windowExteriorPromises),
   ]);
   const textureMap = new Map<string, THREE.Texture>(kitTextures);
+  const windowExteriorTextures = new Map<string, THREE.Texture>(windowExteriorEntries);
   const travelerClips: Record<TravelerAnimation, TravelerClip> = {
     idle_read_map: { texture: travelerTextures[0], fps: 1000 / 240 },
     walk_read_map: { texture: travelerTextures[1], fps: 1000 / 160 },
@@ -150,6 +168,13 @@ async function createShopScene(): Promise<SceneRig> {
   };
 
   plane('background', textureMap.get(manifest.background)!, [0, 0, width, height], 0);
+  const meadowWindow = plane('meadows_window_exterior', windowExteriorTextures.get('meadows')!, [415, 20, 680, 285], 1);
+  const foundryWindow = plane('foundry_window_exterior', windowExteriorTextures.get('foundry')!, [415, 20, 680, 285], 1);
+  const setWindowView = (view: WindowView) => {
+    meadowWindow.visible = view === 'meadows';
+    foundryWindow.visible = view === 'foundry';
+  };
+  setWindowView('harbor');
   const orderedObjects = [...manifest.objects].sort((a, b) => a.z_order - b.z_order);
   let shopkeeperObject: HarborObject | undefined;
   for (const object of orderedObjects) {
@@ -278,6 +303,7 @@ async function createShopScene(): Promise<SceneRig> {
     customer,
     setDoorOpen,
     setLanternGlow,
+    setWindowView,
     setShopkeeperAnimation,
     setTravelerAnimation,
     setTravelerX,
@@ -301,11 +327,13 @@ export function LowPolyShopDemo() {
   const completed = useRef(false);
   const doorOpenRef = useRef(false);
   const lanternsOnRef = useRef(true);
+  const windowViewRef = useRef<WindowView>('harbor');
   const manualAnimation = useRef<ShopkeeperAnimation>('idle');
   const [status, setStatus] = useState('Traveler waits at the counter');
   const [playing, setPlaying] = useState(false);
   const [doorOpen, setDoorOpenState] = useState(false);
   const [lanternsOn, setLanternsOnState] = useState(true);
+  const [windowView, setWindowViewState] = useState<WindowView>('harbor');
   const [shopkeeperAnimation, setShopkeeperAnimationState] = useState<ShopkeeperAnimation>('idle');
 
   const setDoorOpen = (open: boolean) => {
@@ -317,6 +345,12 @@ export function LowPolyShopDemo() {
     lanternsOnRef.current = enabled;
     rigRef.current?.setLanternGlow(enabled);
     setLanternsOnState(enabled);
+  };
+  const selectWindowView = (view: WindowView) => {
+    windowViewRef.current = view;
+    rigRef.current?.setWindowView(view);
+    setWindowViewState(view);
+    setStatus(`${view === 'meadows' ? 'Meadows' : view === 'foundry' ? 'Foundry' : 'Harbor'} visible through the window`);
   };
   const selectShopkeeperAnimation = (animation: ShopkeeperAnimation) => {
     manualAnimation.current = animation;
@@ -345,6 +379,7 @@ export function LowPolyShopDemo() {
         element.appendChild(renderer.domElement);
         rigRef.current = rig;
         rig.setLanternGlow(lanternsOnRef.current);
+        rig.setWindowView(windowViewRef.current);
         rig.setDoorOpen(doorOpenRef.current);
 
         const resize = () => {
@@ -505,6 +540,14 @@ export function LowPolyShopDemo() {
         <button className="low-poly-play" type="button" onClick={playVisit} disabled={playing}>
           {playing ? 'Visit in progress…' : 'Play customer visit'}
         </button>
+        <label className="low-poly-window-view">
+          <span>Window view</span>
+          <select value={windowView} onChange={event => selectWindowView(event.target.value as WindowView)}>
+            <option value="harbor">Harbor</option>
+            <option value="meadows">Meadows</option>
+            <option value="foundry">Foundry</option>
+          </select>
+        </label>
         <button type="button" onClick={() => setDoorOpen(!doorOpen)}>{doorOpen ? 'Close door' : 'Open door'}</button>
         <button type="button" onClick={() => setLanternsOn(!lanternsOn)}>{lanternsOn ? 'Dim lanterns' : 'Light lanterns'}</button>
         <button type="button" onClick={nextAnimation}>Shopkeeper: {shopkeeperAnimation}</button>
