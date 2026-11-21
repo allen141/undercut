@@ -710,7 +710,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
             { align: 'right', size: 11, color: paperMuted, max: inner * .64 });
           readingLines.push(`${good.name}: ${money(row.current)}, change ${movement(row.change)}; projected ${money(row.projected)}, change ${movement(row.projectedChange)}.`);
         });
-        primary('open-atlas', 'Choose a town', () => {
+        primary('open-atlas', 'Choose today’s town', () => {
           focus('preview-meadow');
           panel = 'book';
           page = 'summary';
