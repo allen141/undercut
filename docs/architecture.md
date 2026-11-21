@@ -2,7 +2,7 @@
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/web` | React account and campaign screens, the full-screen PixiJS shop, and a Three.js/WebGL 2.5D harbor scene preview, built with Vite |
+| `apps/web` | React account and campaign screens and a full-screen PixiJS shop using the harbor 2.5D scene, built with Vite |
 | `apps/api` | Fastify HTTP API, Better Auth, database access and operator commands |
 | `packages/game-core` | Deterministic game transitions, town and goods definitions, inventory accounting |
 | `packages/contracts` | Shared Zod validation and command types |

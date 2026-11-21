@@ -7,7 +7,7 @@ import {
   newspaperForDay,
 } from '@undercut/game-core';
 import type { BusinessPresentation, GameProps } from './Game.js';
-import { customerPortrait, dialTargets, drawDial, drawRoom, phaseBooks, setCoin, setGood } from './ShopArt.js';
+import { customerPortrait, dialTargets, drawDial, drawRoom, phaseBooks, setCoin, setGood, setCustomerAnimation } from './ShopArt.js';
 import { loadShopTextures, placeSprite, skin } from './ShopAssets.js';
 import { roomLayout, shopScale, type Bounds } from './ShopLayout.js';
 
@@ -297,8 +297,12 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     visitor.visible = true;
     visitor.position.set(0);
     visitor.alpha = 1;
+    const customer = visitor.getChildAt(0) as Sprite;
     const start = playback?.start ?? offerArrival;
-    if (start === undefined || reducedMotion.matches) return;
+    if (start === undefined || reducedMotion.matches) {
+      setCustomerAnimation(customer, textures, 'idle', 0);
+      return;
+    }
 
     const elapsed = Math.max(0, now - start);
     const arrival = playback?.negotiated ? 1 : Math.min(1, elapsed / 420);
@@ -309,6 +313,9 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const thinking = playback && !playback.revealed && arrival === 1 ? Math.sin(elapsed / 210) * 2 : 0;
     visitor.position.set(doorway * step, doorDepth * step - Math.sin(step * Math.PI * 2) * 4 + thinking);
     visitor.alpha = Math.min(1, .28 + arrival * 3, 1 - exit ** 2);
+    const walking = arrival < 1 || exit > 0;
+    setCustomerAnimation(customer, textures, walking ? 'walk' : 'idle',
+      Math.floor(elapsed / (walking ? 112 : 250)));
 
     if (!playback?.revealed) return;
     const result = state.customerResults.find(entry => entry.customerIndex === index);
