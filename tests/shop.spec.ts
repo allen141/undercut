@@ -73,6 +73,12 @@ async function activate(page: Page, name: string | RegExp) {
   else await page.mouse.click(x, y);
 }
 
+async function dismissDayLedger(page: Page) {
+  const ledger = page.getByRole('dialog', { name: 'The shop ledger' });
+  await ledger.getByRole('button', { name: 'Continue trading' }).first().click();
+  await expect(ledger).toHaveCount(0);
+}
+
 async function createCampaign(page: Page, name: string) {
   await page.getByLabel('Shop name').fill(name);
   await page.getByRole('button', { name: 'Create campaign' }).click();
@@ -85,8 +91,7 @@ async function createCampaign(page: Page, name: string) {
     await pages.getByRole('button', { name: title, exact: true }).click();
     await expect(ledger.locator('.ledger-content > h2')).toHaveText(title);
   }
-  await ledger.getByRole('button', { name: 'Continue trading' }).first().click();
-  await expect(ledger).toHaveCount(0);
+  await dismissDayLedger(page);
   await expect(page.locator('.ledger-menu')).toBeVisible();
 }
 
@@ -111,8 +116,6 @@ async function expectStock(page: Page, good: string, amount: number) {
 }
 
 async function chooseTown(page: Page, name: string, keyboard = false) {
-  const ledger = page.getByRole('dialog', { name: 'The shop ledger' });
-  if (await ledger.count()) await ledger.getByRole('button', { name: 'Continue trading' }).first().click();
   const preview = 'Preview ' + name;
   const confirm = 'Choose ' + name;
   if (await action(page, 'Choose today’s town').count()) await activate(page, 'Choose today’s town');
@@ -142,10 +145,13 @@ async function roomViewport(page: Page) {
 }
 
 async function checkTownJournal(page: Page, name: string, issue: string, picture: string, day: number) {
+  const openJournal = `Open ${name} Journal`;
+  // The canvas observes the saved revision asynchronously. Capture after its town control appears.
+  await expect(action(page, openJournal)).toBeEnabled();
   const room = await roomViewport(page);
   const clip = room.clip(room.layout.window, .14, .12, .72, .68);
   const windowBefore = await page.screenshot({ clip });
-  await activate(page, `Open ${name} Journal`);
+  await activate(page, openJournal);
   const journal = page.getByRole('region', { name: `${name} Journal` });
   await expect(journal).toContainText('Market history');
   await expect(journal).toContainText('Market news');
@@ -210,6 +216,7 @@ async function seedGrainNegotiation(page: Page, name: string) {
   await page.reload();
   await page.getByRole('button', { name: new RegExp(name) }).click();
   await expectRevision(page, 0);
+  await dismissDayLedger(page);
 }
 
 async function watchVisitorOutcomes(page: Page) {
@@ -302,7 +309,35 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
   await expect(page.locator('[data-canvas-ledger] li')).toHaveCount(8);
   await expect(report).toContainText(`${state.history.at(-1)?.profit}g`);
   expect(state.history.at(-1)?.profit).toBe(state.revenue - state.costOfSales);
-  if (closedDoor) await expect.poll(async () => (await page.screenshot({ clip })).equals(closedDoor)).toBe(true);
+  if (closedDoor) {
+    const nightDoor = await page.screenshot({ clip });
+    const difference = await page.evaluate(async screenshots => {
+      const [daylight, night] = await Promise.all(screenshots.map(async data => {
+        const png = Uint8Array.from(atob(data), character => character.charCodeAt(0));
+        const bitmap = await createImageBitmap(new Blob([png], { type: 'image/png' }));
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext('2d')!;
+        context.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        return context.getImageData(0, 0, canvas.width, canvas.height).data;
+      }));
+      // The shaded lower panel shows the same closed door, under the room's night tint.
+      const tint = [0x17, 0x17, 0x2d];
+      const opacity = .10;
+      let error = 0;
+      for (let i = 0; i < daylight.length; i += 4) {
+        for (let channel = 0; channel < 3; channel++) {
+          const expected = daylight[i + channel] * (1 - opacity) + tint[channel] * opacity;
+          error += Math.abs(night[i + channel] - expected);
+        }
+      }
+      return error / (daylight.length * .75);
+    }, [closedDoor.toString('base64'), nightDoor.toString('base64')]);
+    // Allow for integer rounding in the WebGL blend and screenshot conversion.
+    expect(difference).toBeLessThan(3);
+  }
   await activate(page, 'Day’s takings');
   return revision;
 }
@@ -431,6 +466,7 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await activate(page, 'Day’s takings');
   await activate(page, 'Begin day 2');
   await expectRevision(page, closingRevision + 1);
+  await dismissDayLedger(page);
   await expect(page.getByRole('region', { name: 'The Wandering Gazette' })).toContainText('Morning edition · Day 2');
   await activate(page, 'Choose today’s town');
   await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 2');
@@ -487,6 +523,7 @@ test('fits and accepts touch within a zoomed Android viewport', async ({ page, a
   expect(zoomed.zoom).toBeCloseTo(1.7, 2);
   expect(zoomed.deviceRatio).toBeGreaterThan(2);
   expect(zoomed.backingRatio).toBeCloseTo(2, 1);
+  await dismissDayLedger(page);
   await chooseTown(page, 'Meadow');
   await expectRevision(page, 1);
   await visit(page, 'Mill Yard');
@@ -563,6 +600,7 @@ test('docks the Accounts Book across a phone running in desktop viewport mode', 
   await page.screenshot({ path: info.outputPath('accounts-book-desktop-mode.png') });
   await activate(page, 'Begin day 10');
   await expectRevision(page, 1);
+  await dismissDayLedger(page);
   await expect(page.getByRole('region', { name: 'The Wandering Gazette' })).toContainText('Morning edition · Day 10');
   await activate(page, 'Choose today’s town');
   await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 10');
@@ -653,6 +691,7 @@ test('keeps two campaigns independent across two days, reconnects, and accepts a
 
   await activate(page, 'Begin day 2');
   await expectRevision(page, meadowClosing + 1);
+  await dismissDayLedger(page);
   await chooseTown(page, 'Harbor');
   await expectRevision(page, meadowClosing + 2);
   await visit(page, 'Dockside Lots');
