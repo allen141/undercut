@@ -14,6 +14,8 @@ type AssetName = typeof names[number];
 export type ShopTextures = Record<AssetName, Texture>;
 
 export async function loadShopTextures(): Promise<ShopTextures> {
+  // Pixi's worker capability check fetches a data URL, which the site's CSP blocks.
+  Assets.setPreferences({ preferWorkers: false });
   const urls = names.map(name => `${import.meta.env.BASE_URL}shop-art/${name}.webp`);
   const textures = await Assets.load<Texture>(urls);
   return Object.fromEntries(names.map((name, index) => [name, textures[urls[index]]])) as ShopTextures;
