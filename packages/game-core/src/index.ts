@@ -11,6 +11,7 @@ export {
   MAX_VENDOR_VISITS, REPUTATION_TIERS, VENDORS, reputationFor, vendorsInTown,
   type Vendor, type VendorOffer, type VendorReputation,
 } from './market.js';
+export { newspaperForDay, type ArticleCategory, type MarketOutlook, type Newspaper, type WorldArticle, type WorldEffect } from './world-news.js';
 
 export const RULES_VERSION = 1;
 export const FLOOR_SHELF_COUNT = 3;
