@@ -416,7 +416,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     control(scene, 'back', 'All campaigns', rect(margin + 3, 12, navW, 44), p.back,
       { copy: narrow ? '‹ Menu' : '‹ All campaigns', disabled: p.busy || !p.online });
     control(scene, 'stock', 'Inventory and gold', rect(w - margin - (narrow ? 67 : 114), 12, narrow ? 64 : 111, 44),
-      () => show('stock', 'stock'), { copy: money(cash) });
+      () => { if (p.openLedger) p.openLedger('inventory'); else show('stock', 'stock'); }, { copy: money(cash) });
     text(scene, narrow ? `Day ${state.day} · ${town?.name ?? 'Travel'}` : `${p.campaign.name.slice(0, 36)}  /  Day ${state.day} · ${town?.name ?? 'Between towns'}`,
       w / 2, 34, { align: 'center', max: w - (narrow ? 155 : 308), serif: !narrow, size: narrow ? 13 : 17 });
 

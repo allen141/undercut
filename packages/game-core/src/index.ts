@@ -46,6 +46,23 @@ export type DailyResult = {
   negotiations?: NegotiationResult[];
   customerResults?: CustomerResult[];
 };
+export type MarketRecord = {
+  goodId: GoodId;
+  wholesalePrice: number | null;
+  demand: number;
+  buyerMin: number;
+  buyerMax: number;
+  vendors: { vendorId: string; offers: { unitCost: number; quantity: number }[] }[];
+};
+export type JournalEvent =
+  | { day: number; type: 'townChosen'; townId: string; market: MarketRecord[] }
+  | { day: number; type: 'vendorVisited' | 'vendorLeft'; vendorId: string }
+  | { day: number; type: 'buyingFinished' }
+  | { day: number; type: 'stockBought'; goodId: GoodId; vendorId: string; quantity: number; unitCost: number; total: number }
+  | { day: number; type: 'shelfSet'; slot: number; goodId: GoodId | null; price: number }
+  | { day: number; type: 'shopOpened'; shelves: { slot: number; goodId: GoodId | null; price: number }[] }
+  | { day: number; type: 'customerServed'; customer: number; goodId: GoodId; outcome: CustomerResult['result']; price: number | null; budget: number }
+  | { day: number; type: 'dayClosed'; result: DailyResult };
 export type LegacyState = {
   rulesVersion: number;
   seed: number;
@@ -63,6 +80,8 @@ export type LegacyState = {
   sold: number;
   log: string[];
   history: DailyResult[];
+  /** Optional so snapshots written before the persistent ledger remain readable. */
+  journal?: JournalEvent[];
 };
 type ShopLoopState = {
   marketDay: number | null;
@@ -105,6 +124,7 @@ export function newGame(seed: number): State {
     sold: 0,
     log: [],
     history: [],
+    journal: [],
     marketDay: null,
     vendorOffers: {},
     activeVendorId: null,
@@ -251,7 +271,9 @@ function advanceBusiness(state: State) {
 }
 
 export function applyCommand(previous: LegacyState | State, command: Command): State {
-  const state = structuredClone(upgradeState(previous));
+  const prior = upgradeState(previous);
+  const state = structuredClone(prior);
+  state.journal ??= [];
   const town = TOWNS.find((candidate) => candidate.id === state.townId);
 
   switch (command.type) {
@@ -420,6 +442,66 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
       state.customerResults = [];
       break;
     }
+  }
+
+  const record = (event: JournalEvent) => state.journal!.push(event);
+  if (command.type === 'chooseTown') {
+    const chosenTown = TOWNS.find((candidate) => candidate.id === state.townId)!;
+    record({
+      day: state.day,
+      type: 'townChosen',
+      townId: chosenTown.id,
+      market: GOODS.map(good => {
+        const { min, max } = priceRange(chosenTown, good.id);
+        const vendors = vendorsInTown(chosenTown.id).map(vendor => ({
+          vendorId: vendor.id,
+          offers: (state.vendorOffers[vendor.id] ?? [])
+            .filter(offer => offer.goodId === good.id)
+            .map(offer => ({ unitCost: offer.unitCost, quantity: offer.quantity })),
+        }));
+        const prices = vendors.flatMap(vendor => vendor.offers.map(offer => offer.unitCost));
+        return {
+          goodId: good.id,
+          wholesalePrice: prices.length ? Math.min(...prices) : null,
+          demand: chosenTown.demand[good.id],
+          buyerMin: min,
+          buyerMax: max,
+          vendors,
+        };
+      }),
+    });
+  } else if (command.type === 'visitVendor') {
+    record({ day: state.day, type: 'vendorVisited', vendorId: command.vendorId });
+  } else if (command.type === 'leaveVendor') {
+    if (prior.activeVendorId) record({ day: state.day, type: 'vendorLeft', vendorId: prior.activeVendorId });
+  } else if (command.type === 'finishBuying') {
+    record({ day: state.day, type: 'buyingFinished' });
+  } else if (command.type === 'buy') {
+    const vendorId = prior.activeVendorId;
+    const offer = prior.vendorOffers[vendorId ?? '']?.find(item => item.id === command.offerId);
+    if (vendorId && offer) record({
+      day: state.day, type: 'stockBought', goodId: offer.goodId, vendorId,
+      quantity: command.quantity, unitCost: offer.unitCost, total: command.quantity * offer.unitCost,
+    });
+  } else if (command.type === 'shelf') {
+    record({ day: state.day, type: 'shelfSet', slot: command.slot, goodId: command.goodId as GoodId | null, price: command.price });
+  } else if (command.type === 'open') {
+    record({ day: state.day, type: 'shopOpened', shelves: state.shelves.map((shelf, slot) => ({ slot, ...shelf })) });
+  }
+
+  if (command.type === 'serve' || command.type === 'negotiate') {
+    const priorResults = prior.customerResults;
+    for (const result of state.customerResults.slice(priorResults.length)) {
+      record({
+        day: state.day, type: 'customerServed', customer: result.customerIndex + 1,
+        goodId: result.goodId, outcome: result.result, price: result.price,
+        budget: state.customers[result.customerIndex]?.budget ?? 0,
+      });
+    }
+  }
+  if (state.history.length > prior.history.length) {
+    const result = state.history.at(-1);
+    if (result) record({ day: state.day, type: 'dayClosed', result: structuredClone(result) });
   }
 
   return state;

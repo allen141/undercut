@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CUSTOMERS_PER_DAY, GOODS, inventoryValue, quantity } from '@undercut/game-core';
 import type { Command } from '@undercut/contracts';
 import type { Campaign } from './App.js';
 import type { ShopController } from './CanvasShop.js';
+import { Ledger, type LedgerPageId } from './Ledger.js';
 
 export type GameProps = {
   campaign: Campaign;
@@ -12,6 +13,7 @@ export type GameProps = {
   error: string;
   send: (command?: Command) => void;
   back: () => void;
+  openLedger?: (page?: LedgerPageId) => void;
 };
 
 export type BusinessPresentation = { served: number; announcement: string };
@@ -26,6 +28,13 @@ export function Game(props: GameProps) {
   const [view, setView] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [business, setBusiness] = useState<BusinessPresentation | null>(null);
+  const [ledgerPage, setLedgerPage] = useState<LedgerPageId>('inventory');
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const openLedger = useCallback((page: LedgerPageId = 'inventory') => {
+    setLedgerPage(page);
+    setLedgerOpen(true);
+  }, []);
+  const closeLedger = useCallback(() => setLedgerOpen(false), []);
 
   useEffect(() => {
     const element = viewport.current;
@@ -74,12 +83,15 @@ export function Game(props: GameProps) {
   }, [attempt]);
 
   useEffect(() => {
-    latest.current = props;
+    latest.current = { ...props, openLedger };
     controller.current?.update();
-  }, [props]);
+  }, [props, openLedger, ledgerOpen]);
 
   const { campaign, busy, online, pending, error } = props;
   const state = campaign.state;
+  useEffect(() => {
+    if (state.phase === 'travel') openLedger('inventory');
+  }, [state.day, state.phase, openLedger]);
   const served = business?.served ?? state.served;
   const ledger = state.log.slice(0, served);
   const unrevealed = business ? state.customerResults.filter(result => result.customerIndex >= served && result.price !== null) : [];
@@ -95,6 +107,9 @@ export function Game(props: GameProps) {
   return <main ref={viewport} className="canvas-game" aria-label={campaign.name} aria-busy={busy} data-revision={campaign.revision}>
     <div className="canvas-stage" ref={stage} />
     <div className="canvas-controls" ref={controls} role="group" aria-label="Shop controls" />
+    <button className="ledger-menu" type="button" aria-label={`Open ledger · ${state.gold} gold`} onClick={() => openLedger('inventory')}>
+      <span>Ledger · </span>◈ {state.gold}g
+    </button>
     <div className="canvas-announcement">
       <div ref={reading} role="region" aria-label="Current book page" hidden />
       {error && <p role="alert">{error}</p>}
@@ -125,5 +140,6 @@ export function Game(props: GameProps) {
         <button onClick={props.back}>All campaigns</button>
       </>}
     </div>}
+    {ledgerOpen && <Ledger campaign={campaign} page={ledgerPage} setPage={setLedgerPage} close={closeLedger} />}
   </main>;
 }

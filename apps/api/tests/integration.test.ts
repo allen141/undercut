@@ -128,6 +128,7 @@ test('campaigns remain private, persist across sign-ins and apply each valid act
 
   const vendorId = 'meadow-bargain';
   const { state } = sameAction[0].json<{ state: State }>();
+  assert.equal(state.journal?.filter(event => event.type === 'townChosen').length, 1);
   const offer = state.vendorOffers[vendorId].find(({ kind, goodId }) => kind === 'regular' && goodId === 'grain');
   assert.ok(offer);
   const visit = await request(commandPath, {
@@ -143,6 +144,7 @@ test('campaigns remain private, persist across sign-ins and apply each valid act
   let campaign = (await request(campaignPath, undefined, owner.cookie)).json();
   assert.equal(campaign.state.gold, 100 - offer.unitCost * buy.quantity);
   assert.equal(campaign.revision, 3);
+  assert.equal((campaign.state as State).journal?.filter(event => event.type === 'stockBought').length, 1);
   assert.deepEqual((await request(commandPath, destination, owner.cookie)).json(), campaign);
 
   // Receipts created by the previous writer included the full campaign.
@@ -251,7 +253,7 @@ test('loading an older campaign upgrades the response and leaves persistence to 
   assert.equal(response.statusCode, 200, response.body);
   const updated = response.json<{ revision: number; state: State }>();
   assert.equal(updated.revision, revision + 1);
-  assert.deepEqual(updated.state, { ...campaign.state, buyingComplete: true });
+  assert.deepEqual(updated.state, { ...campaign.state, buyingComplete: true, journal: [] });
   const [afterCommand] = await db.select().from(campaigns).where(eq(campaigns.id, id));
   assert.equal(afterCommand.revision, updated.revision);
   assert.deepEqual(afterCommand.state, updated.state);

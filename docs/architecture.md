@@ -20,4 +20,6 @@ The [shop day design](game-design/README.md) describes planned player-facing beh
 
 The shop loop keeps campaign snapshots on `rulesVersion` 1. Destination, Buying, Business, and Closing map to the existing stored phase values `travel`, `prepare`, `open`, and `report`, respectively. Extend the snapshot with optional game-loop fields and apply defaults when reading older saves. Keep the existing field shapes and meanings so the previous release can still read a campaign written by this release.
 
+The persistent campaign ledger is an additive optional journal in the same authoritative snapshot. Record immutable market, purchase, display, customer, and closing events in the game core so the browser can render inventory, performance, location and price history, events, and past newspaper editions without reconstructing prior state from current rules. Existing saves without journal entries remain readable; transaction receipts continue to make retried commands idempotent.
+
 The API serves `/api/v1/health/live`, `/api/v1/health/ready`, and `/api/v1/health/version`. The version response identifies the deployed commit and preview pull request. The [deployment runbook](operations/deployment.md) covers image provenance, host operation, and recovery.
