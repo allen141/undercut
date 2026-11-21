@@ -103,6 +103,7 @@ async function expectStock(page: Page, good: string, amount: number) {
 async function chooseTown(page: Page, name: string, keyboard = false) {
   const preview = 'Preview ' + name;
   const confirm = 'Choose ' + name;
+  if (await action(page, 'Choose today’s town').count()) await activate(page, 'Choose today’s town');
   if (keyboard) {
     await action(page, preview).focus();
     await page.keyboard.press('Enter');
@@ -335,13 +336,17 @@ test('previews towns on the dial and confirms the destination', { tag: '@smoke' 
   });
   await expect(shopCanvas(page)).toHaveAttribute('data-renderer', 'webgl');
   await expectNoOverflow(page);
+  const paper = page.getByRole('region', { name: 'The Wandering Gazette' });
+  await expect(paper).toContainText('Morning edition · Day 1');
+  await expect(paper).toContainText('Market outlook');
+  await activate(page, 'Choose today’s town');
   await expect(action(page, 'Preview Meadow')).toHaveAttribute('aria-pressed', 'true');
   const atlas = page.getByRole('region', { name: 'Route Atlas' });
   await expect(atlas).toContainText('Meadow · Grain & herbs');
   await activate(page, 'Close panel');
   await expect(atlas).toHaveCount(0);
   await screenshot(page, info.outputPath('room-and-wall.png'));
-  await activate(page, 'Open destination book');
+  await activate(page, 'Open route atlas');
   await expect(atlas.getByText(/Global average \d/)).toHaveCount(6);
   await expect(atlas).toContainText('Crystal. Day 1, unavailable.');
   const room = await roomViewport(page);
@@ -390,6 +395,7 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await invite(page, account);
   await createCampaign(page, 'Saffron Counter');
   await seedGrainNegotiation(page, 'Saffron Counter');
+  await activate(page, 'Choose today’s town');
   await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Meadow · Grain & herbs');
   await screenshot(page, info.outputPath('01-travel.png'));
   await chooseTown(page, 'Meadow');
@@ -413,6 +419,8 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await activate(page, 'Day’s takings');
   await activate(page, 'Begin day 2');
   await expectRevision(page, closingRevision + 1);
+  await expect(page.getByRole('region', { name: 'The Wandering Gazette' })).toContainText('Morning edition · Day 2');
+  await activate(page, 'Choose today’s town');
   await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 2');
   if (info.project.name === 'mobile-chromium') {
     const dial = action(page, 'Preview Meadow');
@@ -543,6 +551,8 @@ test('docks the Accounts Book across a phone running in desktop viewport mode', 
   await page.screenshot({ path: info.outputPath('accounts-book-desktop-mode.png') });
   await activate(page, 'Begin day 10');
   await expectRevision(page, 1);
+  await expect(page.getByRole('region', { name: 'The Wandering Gazette' })).toContainText('Morning edition · Day 10');
+  await activate(page, 'Choose today’s town');
   await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 10');
 });
 
