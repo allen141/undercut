@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import './low-poly-shop.css';
 
 type CharacterRig = {
@@ -14,7 +18,7 @@ type CharacterRig = {
 
 type SceneRig = {
   scene: THREE.Scene;
-  camera: THREE.OrthographicCamera;
+  camera: THREE.PerspectiveCamera;
   customer: CharacterRig;
   merchant: CharacterRig;
   compass: THREE.Group;
@@ -66,9 +70,9 @@ function createShopScene(): SceneRig {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1d2b31);
   scene.fog = new THREE.Fog(0x1d2b31, 22, 48);
-  const camera = new THREE.OrthographicCamera(-9, 9, 5.5, -5.5, .1, 80);
-  camera.position.set(0, 9.2, 16);
-  camera.lookAt(0, 3.3, 0);
+  const camera = new THREE.PerspectiveCamera(40, 16 / 10, .1, 100);
+  camera.position.set(0, 9.5, 14.35);
+  camera.lookAt(0, 3.15, -.15);
 
   const mat = {
     wall: material(0x8d8878), wallLight: material(0xb8ae98),
@@ -355,7 +359,8 @@ export function LowPolyShopDemo() {
       return;
     }
     const element = host.current;
-    renderer.setPixelRatio(Math.min(1.65, window.devicePixelRatio || 1));
+    const pixelRatio = Math.min(1.65, window.devicePixelRatio || 1);
+    renderer.setPixelRatio(pixelRatio);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -363,17 +368,31 @@ export function LowPolyShopDemo() {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.setAttribute('aria-label', 'Animated low-poly 3D shop rendered with WebGL');
     element.appendChild(renderer.domElement);
+    const composer = new EffectComposer(renderer);
+    composer.setPixelRatio(pixelRatio);
+    composer.addPass(new RenderPass(rig.scene, rig.camera));
+    composer.addPass(new ShaderPass({
+      uniforms: { tDiffuse: { value: null }, strength: { value: .028 } },
+      vertexShader: `varying vec2 vUv;
+void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform sampler2D tDiffuse;
+uniform float strength;
+varying vec2 vUv;
+void main() {
+  vec2 p = (vUv - 0.5) * 2.0;
+  float r2 = dot(p, p);
+  vec2 warpedUv = 0.5 + 0.5 * p * (1.0 + strength * r2);
+  gl_FragColor = texture2D(tDiffuse, clamp(warpedUv, vec2(0.001), vec2(0.999)));
+}`,
+    }));
+    composer.addPass(new OutputPass());
     const resize = () => {
       const width = Math.max(1, element.clientWidth);
       const height = Math.max(1, element.clientHeight);
-      const aspect = width / height;
-      const vertical = Math.max(11.4, 12.5 / aspect);
-      rig.camera.left = -vertical * aspect / 2;
-      rig.camera.right = vertical * aspect / 2;
-      rig.camera.top = vertical / 2;
-      rig.camera.bottom = -vertical / 2;
+      rig.camera.aspect = width / height;
       rig.camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
+      composer.setSize(width, height);
     };
     const observer = new ResizeObserver(resize);
     observer.observe(element);
@@ -435,13 +454,14 @@ export function LowPolyShopDemo() {
         completed.current = true;
         setPlaying(false);
       }
-      renderer.render(rig.scene, rig.camera);
+      composer.render();
       frame = requestAnimationFrame(animate);
     };
     frame = requestAnimationFrame(animate);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      composer.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       rig.geometries.forEach(geometry => geometry.dispose());
