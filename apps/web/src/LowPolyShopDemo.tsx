@@ -72,7 +72,7 @@ function createShopScene(): SceneRig {
   scene.fog = new THREE.Fog(0x1d2b31, 22, 48);
   const camera = new THREE.PerspectiveCamera(40, 16 / 10, .1, 100);
   camera.position.set(0, 9.5, 14.35);
-  camera.lookAt(0, 3.15, -.15);
+  camera.lookAt(0, 2.65, -.15);
 
   const mat = {
     wall: material(0x8d8878), wallLight: material(0xb8ae98),
