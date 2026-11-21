@@ -35,7 +35,7 @@ function drawRoomBackground(layer: Container, art: ShopTextures, width: number, 
 }
 
 function drawFrontWall(layer: Container, art: ShopTextures, door: Bounds, window: Bounds,
-  townId: string | null, open: boolean) {
+  townId: string | null, open: boolean, night: boolean) {
   // The openings share one projection so the wall and its frames occlude a continuous street.
   const wx = (u: number) => window.x + window.w * u;
   const wy = (v: number) => window.y + window.h * v;
@@ -61,6 +61,18 @@ function drawFrontWall(layer: Container, art: ShopTextures, door: Bounds, window
     vista.addChild(fitSprite(art[`town-${townId}`], outside, 'cover', .54));
   } else {
     vista.addChild(new Graphics().rect(outside.x, outside.y, outside.w, outside.h).fill(0x35263b));
+  }
+  if (night) {
+    vista.addChild(new Graphics().rect(outside.x, outside.y, outside.w, outside.h)
+      .fill({ color: 0x101934, alpha: .48 }));
+    vista.addChild(glow(wx(.71), wy(.28), Math.min(window.w, window.h) * .095, 0x9bb8f1));
+    vista.addChild(new Graphics().circle(wx(.71), wy(.28), Math.min(window.w, window.h) * .045)
+      .fill(0xf6e5bc));
+    const stars = new Graphics();
+    [[.19, .22], [.33, .31], [.44, .18], [.57, .36], [.83, .20], [.28, .46], [.66, .48], [.88, .40]]
+      .forEach(([x, y], index) => stars.circle(wx(x), wy(y), index % 3 === 0 ? 1.8 : 1.2)
+        .fill({ color: 0xffe8c2, alpha: .8 }));
+    vista.addChild(stars);
   }
   vista.mask = openings;
   // Register the visible side posts to the layout despite the texture's transparent margins.
@@ -137,7 +149,8 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
   const { portrait, bookBelowWall, dial, travelDial, bay, door, window, shelves, bell, book, counter, horizon } = roomLayout(width, height);
   drawRoomBackground(layer, art, width, height, horizon, portrait);
   const townId = options.townId ?? state.townId;
-  drawFrontWall(layer, art, door, window, townId, state.phase === 'open');
+  const night = state.phase === 'report';
+  drawFrontWall(layer, art, door, window, townId, state.phase === 'open', night);
   if (state.phase !== 'travel') drawDial(layer, art, dial, townId);
 
   const dialRight = travelDial.x + travelDial.w;
@@ -155,6 +168,13 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
     const stock = shelf?.goodId ? options.stock?.(shelf.goodId) ?? quantity(state, shelf.goodId) : 0;
     drawShelf(layer, art, bounds, shelf, stock, options.selectedShelf === index, index === WINDOW_SLOT_INDEX);
   });
+
+  if (night) {
+    layer.addChild(new Graphics().rect(0, 0, width, height).fill({ color: 0x17172d, alpha: .10 }));
+    layer.addChild(glow(lantern.x + lantern.w / 2, lantern.y + lantern.h * .6, 82, 0xffbf72));
+    layer.addChild(new Graphics().ellipse(lantern.x + lantern.w / 2, lantern.y + lantern.h * .6,
+      lantern.w * .28, lantern.h * .27).fill({ color: 0xffbb62, alpha: .12 }));
+  }
 
   foreground.addChild(placeSprite(art.counter, counter));
   if (!portrait) {

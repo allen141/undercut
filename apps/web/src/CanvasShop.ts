@@ -4,6 +4,7 @@ import 'pixi.js/unsafe-eval';
 import {
   CUSTOMERS_PER_DAY, GOODS, MAX_VENDOR_VISITS, REPUTATION_TIERS, TOWNS, WINDOW_SLOT_INDEX,
   inventoryValue, priceRange, quantity, reputationFor, vendorOffersForTown, vendorsInTown, type CustomerResult, type GoodId,
+  newspaperForDay,
 } from '@undercut/game-core';
 import type { BusinessPresentation, GameProps } from './Game.js';
 import { customerPortrait, dialTargets, drawDial, drawRoom, phaseBooks, setCoin, setGood } from './ShopArt.js';
@@ -14,7 +15,7 @@ extensions.remove(AccessibilitySystem);
 
 type Rect = Bounds;
 type Action = { id: string; label: string; box: Rect; run: () => void; disabled?: boolean; active?: boolean };
-type Panel = 'book' | 'shelf' | 'price' | 'stock' | 'journal';
+type Panel = 'book' | 'shelf' | 'price' | 'stock' | 'journal' | 'newspaper';
 type Page = 'summary' | 'vendors' | 'activity' | 'stock';
 type Playback = { index: number; until: number; start: number; revealAfter: number; revealed: boolean; negotiated: boolean };
 export type ShopController = { update(): void; destroy(): void };
@@ -31,6 +32,7 @@ const paperMuted = 0x614941;
 const localTrend = 0x315965;
 const globalTrend = 0x94674f;
 const journalTheme = { cover: 0x632e44, edge: 0xc18a58, page: 0xf5dfbb };
+const newspaperTheme = { cover: 0x57433a, edge: 0xd2a66e, page: 0xf3e2c2 };
 const journalGoods = { meadow: 'grain', forge: 'iron', harbor: 'cloth' } as const;
 const money = (n: number) => `${n}g`;
 const quotedPrice = (n: number) => money(Math.round(n * 10) / 10);
@@ -74,7 +76,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   app.canvas.dataset.renderer = app.renderer.name;
 
   let previous = props().campaign;
-  let panel: Panel | null = previous.state.phase === 'travel' || previous.state.pendingNegotiation ? 'book' : null;
+  let panel: Panel | null = previous.state.phase === 'travel' ? 'newspaper'
+    : previous.state.pendingNegotiation ? 'book' : null;
   let page: Page = 'summary';
   let pageIndex = 0;
   let journalArticle: number | null = null;
@@ -164,7 +167,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     motion.clear();
     if (disposed || !transition || !panel) return;
     const end = roomLayout(w, h).page;
-    const book = panel === 'journal' ? journalTheme : phaseBooks[playback ? 'open' : props().campaign.state.phase];
+    const book = panel === 'journal' ? journalTheme : panel === 'newspaper' ? newspaperTheme
+      : phaseBooks[playback ? 'open' : props().campaign.state.phase];
     const p = Math.min(1, (now - transition.start) / (transition.kind === 'open' ? 270 : 210));
     if (transition.kind === 'open' && readingLayer) readingLayer.alpha = Math.max(0, (p - .38) / .62);
     if (p < 1) {
@@ -375,7 +379,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       presentBusiness(nextPresentation);
       lastPresentation = nextPresentation;
     }
-    const theme = panel === 'journal' ? journalTheme : phaseBooks[phase];
+    const theme = panel === 'journal' ? journalTheme : panel === 'newspaper' ? newspaperTheme : phaseBooks[phase];
     const town = TOWNS.find(t => t.id === state.townId);
     const preview = TOWNS[selectedTown];
     const blocked = p.busy || p.pending || !p.online || !!playback;
@@ -457,8 +461,12 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         show('journal', 'town-journal');
       }, { copy: journalName });
     }
+    if (phase === 'travel') {
+      control(scene, 'morning-paper', 'Read the morning newspaper', layout.journal,
+        () => show('newspaper', 'morning-paper'), { copy: 'Morning Gazette' });
+    }
 
-    const bookName = { travel: 'Open destination book', prepare: 'Open wholesale book', open: 'Open business book', report: 'Day’s takings' }[phase];
+    const bookName = { travel: 'Open route atlas', prepare: 'Open wholesale book', open: 'Open business book', report: 'Day’s takings' }[phase];
     control(scene, 'book', bookName, layout.book, openBook, { hide: true });
     if (!modal) {
       const { x, y, w: width, h: height } = layout.book;
@@ -673,6 +681,42 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
             render();
           }, { copy: `${notice.title}  ›` }));
         }
+      }
+      if (panel === 'newspaper' && phase === 'travel') {
+        const issue = newspaperForDay(state.seed, state.day, state.history);
+        const excerpt = (body: string) => body.length > 108 ? `${body.slice(0, 105).trimEnd()}…` : body;
+        title('The Wandering Gazette');
+        note(`Morning edition · Day ${issue.day} · World & markets`, 66);
+        rule(82);
+        const lead = issue.articles[0];
+        words(lead.headline, 0, 103, { serif: true, size: 15, max: inner });
+        words(excerpt(lead.body), 0, 124, { size: 11, max: inner });
+        const followup = issue.articles[1];
+        words(followup.headline, 0, 163, { serif: true, size: 13, max: inner });
+        words(excerpt(followup.body), 0, 182, { size: 11, max: inner });
+        readingLines.push(`${lead.headline}. ${lead.body}`, `${followup.headline}. ${followup.body}`);
+        rule(211);
+        words('Market outlook', 0, 223, { serif: true, size: 14 });
+        words('Global average · today / projected', inner, 223,
+          { align: 'right', size: 10, color: paperMuted });
+        issue.outlook.forEach((row, index) => {
+          const good = GOODS.find(item => item.id === row.goodId)!;
+          const movement = (value: number) => value > 0 ? `+${value}` : String(value);
+          const todayArrow = row.change > 0 ? '↑' : row.change < 0 ? '↓' : '→';
+          const projectionArrow = row.projectedChange > 0 ? '↑' : row.projectedChange < 0 ? '↓' : '→';
+          const copy = `${money(row.current)} ${todayArrow}${movement(row.change)}  ·  ${money(row.projected)} ${projectionArrow}${movement(row.projectedChange)}`;
+          words(good.name, 0, 244 + index * 17, { size: 11, max: inner * .36 });
+          words(copy, inner, 244 + index * 17,
+            { align: 'right', size: 11, color: paperMuted, max: inner * .64 });
+          readingLines.push(`${good.name}: ${money(row.current)}, change ${movement(row.change)}; projected ${money(row.projected)}, change ${movement(row.projectedChange)}.`);
+        });
+        primary('open-atlas', 'Choose a town', () => {
+          focus('preview-meadow');
+          panel = 'book';
+          page = 'summary';
+          animate('open');
+          render();
+        }, { copy: 'Choose today’s town' });
       }
       if (panel === 'stock') {
         title('Stock chest');
@@ -1171,7 +1215,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         renderOutcome = true;
       } else if (current.phase !== prior.phase) {
         focus(current.phase === 'travel' ? 'preview-meadow' : 'book');
-        panel = current.phase === 'travel' ? 'book' : null;
+        panel = current.phase === 'travel' ? 'newspaper' : null;
         returnFocus = 'book';
         viewedVendor = '';
         selectedOffer = '';

@@ -2,7 +2,7 @@
 
 ## Entry and decision
 
-The door closes after the eighth customer, the result is recorded in campaign history, and the closing ledger becomes available. Show the player what the day earned and how destination, buying, displays, pricing, and offers contributed to the result. The player chooses when to continue with **Next Day**.
+The door closes after the eighth customer, the result is recorded in campaign history, and the shared shop scene moves to its standard nighttime view. The moon and stars outside, cooler window light, and warm shop lantern make the end of the trading day unmistakable. The closing ledger is the player's end-of-day control point. Show what the day earned and how destination, buying, displays, pricing, and offers contributed to the result.
 
 ## Core UI and feedback
 
@@ -13,4 +13,4 @@ The door closes after the eighth customer, the result is recorded in campaign hi
 
 ## Exit and edge cases
 
-**Next Day** returns the player to destination selection. Ending gold, unsold inventory at its purchase cost, and vendor reputation carry forward. The new day's visits and customer progress start fresh. On a day without purchases, sales, or offers, the relevant totals stay at zero and the ledger explains what happened. Reloading during closing shows the same ledger and allows the player to continue once.
+**Next Day** begins the morning and opens that day's newspaper before destination selection. The paper includes world and town articles, current global average wholesale prices, and a clearly labeled short-term projection. The player can then open the Route Atlas and pick a town. Ending gold, unsold inventory at its purchase cost, and vendor reputation carry forward. The new day's visits and customer progress start fresh. On a day without purchases, sales, or offers, the relevant totals stay at zero and the ledger explains what happened. Reloading during closing shows the same nighttime room and ledger; reopening after advancing reproduces the same newspaper for that campaign day.

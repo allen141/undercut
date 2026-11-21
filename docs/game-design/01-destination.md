@@ -2,7 +2,7 @@
 
 ## Entry and decision
 
-The Route Atlas opens automatically on entering destination selection, including at the start of a campaign and after **Next Day**. The dial enlarges above the closed shop door. The player can preview Meadow, Forge, or Harbor and can stay in the same town on consecutive days.
+The morning newspaper opens automatically at the start of each day. After reading it, the player opens the Route Atlas, whose dial enlarges above the closed shop door. The player can preview Meadow, Forge, or Harbor and can stay in the same town on consecutive days. The first campaign day uses the same morning briefing so this sequence is learned from the beginning.
 
 Compare what the towns can supply against what their customers tend to buy. For the previewed town, show its specialty, a wholesale price trend for each good, local demand, expected retail budget ranges, and carried stock. Show available gold alongside the comparison. Each trend shows up to five days of average regular vendor prices before reputation discounts, including today's average. A horizontal dashed line marks the average across all regular quotes for the same good, towns, and days shown. Mark unavailable goods explicitly. The wholesale book gives the full vendor-by-vendor comparison after arrival.
 
