@@ -67,8 +67,8 @@ function createShopScene(): SceneRig {
   scene.background = new THREE.Color(0x1d2b31);
   scene.fog = new THREE.Fog(0x1d2b31, 22, 48);
   const camera = new THREE.OrthographicCamera(-9, 9, 5.5, -5.5, .1, 80);
-  camera.position.set(0, 12.5, 16);
-  camera.lookAt(0, 2.1, 0);
+  camera.position.set(0, 9.2, 16);
+  camera.lookAt(0, 3.3, 0);
 
   const mat = {
     wall: material(0x8d8878), wallLight: material(0xb8ae98),
@@ -77,6 +77,8 @@ function createShopScene(): SceneRig {
     cream: material(0xd6c9a9), gold: material(0xf0b967, .38, { metalness: .42 }),
     dark: material(0x23383d), glass: material(0x8caeb0, .25, { transparent: true, opacity: .30, side: THREE.DoubleSide }),
     sea: material(0x607f83), leaf: material(0x687d61), stone: material(0x68777a),
+    windowSky: material(0x87a7b0), harbor: material(0x526a70), harborRoof: material(0x354c54),
+    windowGlow: material(0xf0b96a, .7, { emissive: 0x8c491d, emissiveIntensity: .7 }),
     skin: material(0xc88762), skinLight: material(0xd99d79),
     hair: material(0x3d3432), hairLight: material(0x6d5142), white: material(0xdacbb0),
     black: material(0x252c30), blue: material(0x496e82),
@@ -108,7 +110,7 @@ function createShopScene(): SceneRig {
     }
   }
 
-  // Cutaway room. A large window opens to a misty harbor, framed by timber braces.
+  // Back wall with a broad harbor window, framed in timber.
   box(scene, [2.4, 6.2, .32], [-4.8, 3.1, -5.1], mat.wall);
   box(scene, [3.0, 6.2, .32], [4.7, 3.1, -5.1], mat.wall);
   box(scene, [6.6, 1.65, .32], [-.1, .82, -5.1], mat.wallLight);
@@ -118,18 +120,67 @@ function createShopScene(): SceneRig {
     box(scene, [.10, 5.8, .38], [x + .08, 3.1, -4.66], mat.woodLight);
   }
   box(scene, [12, .28, .45], [0, 6.05, -4.83], mat.woodDark);
-  for (const x of [-5.5, -2.6, .2, 3.0, 5.6]) {
-    const rafter = box(scene, [.26, .28, 5.4], [x, 5.9, -1.8], mat.wood);
-    rafter.rotation.x = -.1;
+
+  // Plastered side walls and timber posts enclose the shop, with its front left open to the camera.
+  for (const side of [-1, 1]) {
+    box(scene, [.30, 5.65, 10.45], [side * 5.86, 2.825, 0], mat.wall);
+    box(scene, [.045, 4.28, 9.85], [side * 5.695, 2.78, 0], mat.wallLight, false);
+    box(scene, [.065, 1.14, 10.12], [side * 5.68, .61, 0], mat.woodDark);
+    box(scene, [.12, .13, 10.10], [side * 5.66, 1.22, 0], mat.woodLight);
+    box(scene, [.38, .32, 10.62], [side * 5.66, 5.55, 0], mat.woodDark);
+    for (const z of [-4.95, -1.72, 1.72, 4.95]) {
+      box(scene, [.22, 5.58, .22], [side * 5.62, 2.79, z], mat.woodDark);
+    }
   }
 
-  // Cool window haze keeps the room as the only modeled setting.
-  const fogPane = new THREE.Mesh(
-    new THREE.PlaneGeometry(6.55, 3.58), material(0x829597, .9, { side: THREE.DoubleSide }),
+  // Cool coastal sky, distant roofs, lantern-lit windows and water appear only through the window.
+  const skyPane = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.55, 3.58), mat.windowSky,
   );
-  geometries.push(fogPane.geometry);
-  fogPane.position.set(-.12, 3.38, -5.46);
-  scene.add(fogPane);
+  geometries.push(skyPane.geometry);
+  skyPane.position.set(-.12, 3.38, -5.55);
+  scene.add(skyPane);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(6.55, 1.25), mat.sea);
+  geometries.push(water.geometry);
+  water.position.set(-.12, 2.25, -5.48);
+  scene.add(water);
+  for (const [y, width] of [[1.82, 6.1], [2.02, 5.5], [2.22, 6.3], [2.43, 5.7]] as const) {
+    box(scene, [width, .025, .018], [-.12, y, -5.42], mat.tealLight, false);
+  }
+
+  const harborBuildings = [
+    { x: -2.82, width: .72, height: .92 }, { x: -2.02, width: .58, height: .62 },
+    { x: -1.24, width: .78, height: 1.15 }, { x: -.28, width: .62, height: .72 },
+    { x: .58, width: .82, height: 1.34 }, { x: 1.57, width: .67, height: .82 },
+    { x: 2.44, width: .82, height: 1.08 }, { x: 3.02, width: .38, height: .72 },
+  ];
+  for (const [index, building] of harborBuildings.entries()) {
+    const base = 2.38;
+    box(scene, [building.width, building.height, .08],
+      [building.x, base + building.height / 2, -5.36], index % 2 ? mat.harborRoof : mat.harbor, false);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(building.width * .72, .40, 4), mat.harborRoof);
+    geometries.push(roof.geometry);
+    roof.position.set(building.x, base + building.height + .16, -5.35);
+    roof.rotation.y = Math.PI / 4;
+    scene.add(roof);
+    const windowY = base + Math.min(.38, building.height * .48);
+    for (const offset of [-.18, .18]) {
+      if (building.width < .48 && offset > 0) continue;
+      box(scene, [.09, .13, .025], [building.x + offset, windowY, -5.30], mat.windowGlow, false);
+    }
+  }
+  // A low pier and a small moored boat establish the harbor scale beyond the glass.
+  box(scene, [6.4, .07, .055], [-.12, 2.63, -5.34], mat.harborRoof, false);
+  for (const x of [-2.45, -1.35, -.25, .85, 1.95, 2.85]) {
+    box(scene, [.055, .48, .07], [x, 2.39, -5.34], mat.harborRoof, false);
+  }
+  box(scene, [.72, .12, .10], [.25, 2.93, -5.27], mat.woodDark, false);
+  box(scene, [.045, .70, .04], [.25, 3.30, -5.26], mat.harborRoof, false);
+  const sail = new THREE.Mesh(new THREE.PlaneGeometry(.31, .45), mat.cream);
+  geometries.push(sail.geometry);
+  sail.position.set(.08, 3.31, -5.24);
+  scene.add(sail);
+
   const windowPane = box(scene, [6.55, 3.58, .035], [-.12, 3.38, -4.89], mat.glass, false);
   windowPane.renderOrder = 2;
   for (const x of [-3.35, -.12, 3.10]) box(scene, [.12, 3.75, .20], [x, 3.38, -4.76], mat.woodLight);
