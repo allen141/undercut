@@ -16,6 +16,7 @@ The existing game follows this shop loop.
 The persistent campaign ledger remains available through a Ledger button throughout play. Its inventory, performance, market history, event log, and newspaper archive read from an optional append-only journal stored in the campaign snapshot. Phase-specific books, including the morning newspaper and Route Atlas, open at their stage transitions.
 
 The shop works on desktop and portrait mobile. The active shop fills the viewport with a PixiJS WebGL canvas. The door dial, market, shelves, counter, and ledger carry the day’s actions. Keyboard and assistive technology can reach the canvas controls through semantic controls. Account forms and campaign selection use native browser controls.
+A developer-only route at `/__dev/shop` demonstrates an alternate low-poly 3D shop and articulated customer in Three.js/WebGL. It is a visual study and does not change campaign state.
 
 Public registration, multiplayer, offline writes, world simulation, branching story events, and cross-campaign rewards are outside this milestone.
 
