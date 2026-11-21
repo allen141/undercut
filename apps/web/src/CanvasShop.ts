@@ -7,7 +7,7 @@ import {
   newspaperForDay,
 } from '@undercut/game-core';
 import type { BusinessPresentation, GameProps } from './Game.js';
-import { customerPortrait, dialTargets, drawDial, drawRoom, phaseBooks, setCoin, setGood } from './ShopArt.js';
+import { customerPortrait, dialTargets, drawDial, drawRoom, phaseBooks, setCoin, setGood, setCustomerAnimation } from './ShopArt.js';
 import { loadShopTextures, placeSprite, skin } from './ShopAssets.js';
 import { roomLayout, shopScale, type Bounds } from './ShopLayout.js';
 
@@ -286,7 +286,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       return;
     }
     const layout = roomLayout(w, h);
-    const body = layout.visitor;
+    const body = layout.sceneVisitor;
     const key = `${state.seed}:${state.day}:${index}:${w}:${h}`;
     if (key !== visitorKey) {
       visitor.removeChildren().forEach(child => child.destroy());
@@ -297,24 +297,31 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     visitor.visible = true;
     visitor.position.set(0);
     visitor.alpha = 1;
+    const customer = visitor.getChildAt(0) as Sprite;
     const start = playback?.start ?? offerArrival;
-    if (start === undefined || reducedMotion.matches) return;
+    if (start === undefined || reducedMotion.matches) {
+      setCustomerAnimation(customer, textures, 'idle', 0);
+      return;
+    }
 
     const elapsed = Math.max(0, now - start);
     const arrival = playback?.negotiated ? 1 : Math.min(1, elapsed / 420);
     const exit = playback ? Math.max(0, Math.min(1, 1 - (visitDuration - elapsed) / visitExitDuration)) : 0;
-    const doorway = layout.door.x + layout.door.w / 2 - (body.x + body.w / 2);
-    const doorDepth = layout.door.y + layout.door.h - (body.y + body.h);
+    const doorway = layout.sceneDoor.x + layout.sceneDoor.w / 2 - (body.x + body.w / 2);
+    const doorDepth = layout.sceneDoor.y + layout.sceneDoor.h - (body.y + body.h);
     const step = Math.max((1 - arrival) ** 2, exit ** 2);
     const thinking = playback && !playback.revealed && arrival === 1 ? Math.sin(elapsed / 210) * 2 : 0;
     visitor.position.set(doorway * step, doorDepth * step - Math.sin(step * Math.PI * 2) * 4 + thinking);
     visitor.alpha = Math.min(1, .28 + arrival * 3, 1 - exit ** 2);
+    const walking = arrival < 1 || exit > 0;
+    setCustomerAnimation(customer, textures, walking ? 'walk' : 'idle',
+      Math.floor(elapsed / (walking ? 112 : 250)));
 
     if (!playback?.revealed) return;
     const result = state.customerResults.find(entry => entry.customerIndex === index);
     if (result?.price == null) return;
     const slot = state.shelves.findIndex(shelf => shelf.goodId === result.goodId);
-    const display = layout.shelves[slot];
+    const display = layout.sceneShelves[slot];
     const progress = Math.min(1, (elapsed - visitReveal) / 790);
     const animateArc = (from: number, to: number, t: number) => from + (to - from) * t;
     const customerX = body.x + body.w * .62 + visitor.x;
@@ -326,8 +333,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       setGood(tradedGood, textures, result.goodId, animateArc(fromX, customerX, t), animateArc(fromY, customerY, t) -
         Math.sin(Math.PI * t) * 24, 18);
     }
-    const coinX = layout.bell.x + layout.bell.w * .5;
-    const coinY = layout.bell.y + layout.bell.h * .53;
+    const coinX = layout.sceneBell.x + layout.sceneBell.w * .5;
+    const coinY = layout.sceneBell.y + layout.sceneBell.h * .53;
     for (let i = 0; i < 3; i++) {
       const t = Math.max(0, Math.min(1, (progress - i * .12) / .73));
       if (t > 0 && t < 1) setCoin(coins[i], animateArc(customerX, coinX, t), animateArc(customerY, coinY, t) -
@@ -477,7 +484,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     }
     if (phase === 'travel' && panel && panel !== 'book') drawDial(scene, textures, layout.travelDial, preview.id, true);
     if (phase === 'prepare' && state.buyingComplete || phase === 'open') {
-      layout.shelves.forEach((bounds, slot) => {
+      layout.sceneShelves.forEach((bounds, slot) => {
         const shelf = state.shelves[slot];
         if (phase === 'prepare') control(scene, `shelf-${slot}`, displayName(slot), bounds, () => setup(slot, `shelf-${slot}`), { hide: true });
         if (phase === 'open' && !shelf.goodId) return;
@@ -491,8 +498,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     }
     if (phase === 'prepare' && state.buyingComplete) {
       const openW = narrow ? 126 : 145;
-      const openX = Math.min(w - margin - openW, layout.bell.x + layout.bell.w + 7);
-      control(scene, 'open', 'Open the shop', rect(openX, layout.bell.y + 5, openW, 44),
+      const openX = Math.min(w - margin - openW, layout.sceneBell.x + layout.sceneBell.w + 7);
+      control(scene, 'open', 'Open the shop', rect(openX, layout.sceneBell.y + 5, openW, 44),
         () => p.send({ type: 'open' }), { primary: true, disabled: blocked });
     }
 
@@ -509,14 +516,14 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     }
 
     if (playback && !playback.revealed && !modal) {
-      const body = layout.visitor;
+      const body = layout.sceneVisitor;
       control(scene, 'hurry-visitor', 'Hurry this visitor', rect(body.x, body.y, body.w, body.h * 1.08), hurryVisitor, { hide: true });
     }
     if (!modal && playback) {
       const rightEdge = layout.bookBelowWall ? w - margin : layout.bay.x - 13;
       const cardW = Math.min(narrow ? 298 : 370, rightEdge - margin - 6);
-      const cardX = Math.max(margin + 6, Math.min(rightEdge - cardW, layout.visitor.x - cardW * .35));
-      const cardY = layout.bookBelowWall ? layout.page.y + 26 : Math.max(116, layout.visitor.y - 112);
+      const cardX = Math.max(margin + 6, Math.min(rightEdge - cardW, layout.sceneVisitor.x - cardW * .35));
+      const cardY = layout.bookBelowWall ? layout.page.y + 26 : Math.max(116, layout.sceneVisitor.y - 112);
       const sale = activeResult && latest && latest.price !== null ? latest : undefined;
       const cardAccent = sale ? gold : activeResult ? 0xca9986 : 0x9ba99c;
       box(scene, rect(cardX, cardY, cardW, 103), sale ? 0x382a2d : ink, cardAccent, .97, 10);

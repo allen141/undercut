@@ -28,6 +28,25 @@ export function roomLayout(width: number, height: number) {
     : { x: 15, y: Math.max(70, (height - sidePageHeight) / 2),
       w: Math.min(320, Math.max(280, width * .23)), h: sidePageHeight };
 
+  const sceneArea = bookBelowWall
+    ? { x: 0, y: 54, w: width, h: Math.max(260, horizon - 54) }
+    : { x: 0, y: 0, w: width, h: height };
+  const sceneScale = Math.min(sceneArea.w / 1448, sceneArea.h / 1086);
+  const sceneWidth = 1448 * sceneScale;
+  const sceneHeight = 1086 * sceneScale;
+  const scene = {
+    x: (width - sceneWidth) / 2,
+    y: sceneArea.y + sceneArea.h - sceneHeight,
+    w: sceneWidth,
+    h: sceneHeight,
+  };
+  const mapScene = ([x, y, w, h]: [number, number, number, number]): Bounds => ({
+    x: scene.x + x * sceneScale,
+    y: scene.y + y * sceneScale,
+    w: w * sceneScale,
+    h: h * sceneScale,
+  });
+
   const wallGap = Math.min(25, width * .036);
   const doorAreaLeft = bookBelowWall ? Math.max(10, width * .035) : page.x + page.w + 12;
   const sideDoorRoom = Math.max(106, Math.min(250, width * .47 - doorAreaLeft - wallGap));
@@ -82,5 +101,19 @@ export function roomLayout(width: number, height: number) {
   const visitorH = portrait ? 100 : Math.min(225, height * .24);
   const visitorW = Math.min(visitorH * .90, width * .24);
   const visitor = { x: width * (portrait ? .12 : .34), y: counter.y - visitorH + 6, w: visitorW, h: visitorH };
-  return { portrait, bookBelowWall, door, window, dial, travelDial, journal, bay, shelves, counter, bell, book, visitor, horizon, page };
+  const sceneDoor = mapScene([1148, 140, 270, 420]);
+  const sceneWindow = mapScene([410, 12, 650, 270]);
+  const sceneShelves = [
+    mapScene([270, 184, 178, 126]),
+    mapScene([194, 309, 178, 118]),
+    mapScene([118, 420, 280, 120]),
+    mapScene([632, 558, 420, 112]),
+  ];
+  const sceneCounter = mapScene([628, 351, 568, 250]);
+  const sceneBell = mapScene([1090, 305, 75, 124]);
+  const sceneVisitor = mapScene([545, 348, 320, 320]);
+  return {
+    portrait, narrow, bookBelowWall, scene, sceneDoor, sceneWindow, sceneShelves, sceneCounter, sceneBell, sceneVisitor,
+    door, window, dial, travelDial, journal, bay, shelves, counter, bell, book, visitor, horizon, page,
+  };
 }

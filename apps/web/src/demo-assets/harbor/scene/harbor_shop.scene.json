@@ -1,0 +1,1331 @@
+{
+  "schema": "undercut.harbor_scene.v1",
+  "name": "Undercut — Harbor Shop (desktop camera-lock starter)",
+  "authored_size": [
+    1448,
+    1086
+  ],
+  "desktop_target": [
+    1920,
+    1080
+  ],
+  "scale_policy": "contain",
+  "camera": {
+    "projection": "orthographic_camera_locked",
+    "fit": "contain",
+    "fisheye": false,
+    "parallax_max_pixels": 0,
+    "note": "Perspective is baked into the 2D art. Do not rotate billboard planes or introduce fisheye."
+  },
+  "background": "art/backgrounds/harbor_empty_1448x1086.png",
+  "objects": [
+    {
+      "id": "red_rug",
+      "asset": "red_rug",
+      "rect": [
+        460,
+        700,
+        730,
+        236
+      ],
+      "z_order": 5,
+      "visible": true,
+      "group": "floor",
+      "opacity": 1
+    },
+    {
+      "id": "floor_window_light",
+      "asset": "window_light_patch",
+      "rect": [
+        400,
+        455,
+        480,
+        155
+      ],
+      "z_order": 6,
+      "visible": false,
+      "group": "effects",
+      "opacity": 0.24
+    },
+    {
+      "id": "left_shelving",
+      "asset": "left_shelf",
+      "rect": [
+        16,
+        20,
+        485,
+        655
+      ],
+      "z_order": 10,
+      "visible": true,
+      "group": "furniture",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:shelf",
+        "label": "Left Shelving"
+      }
+    },
+    {
+      "id": "closed_door",
+      "asset": "door_closed",
+      "rect": [
+        1148,
+        140,
+        270,
+        420
+      ],
+      "z_order": 12,
+      "visible": true,
+      "group": "architecture",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "toggle:door",
+        "label": "Closed Door"
+      }
+    },
+    {
+      "id": "open_door",
+      "asset": "door_open",
+      "rect": [
+        1148,
+        140,
+        270,
+        420
+      ],
+      "z_order": 12,
+      "visible": false,
+      "group": "architecture",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "toggle:door",
+        "label": "Open Door"
+      }
+    },
+    {
+      "id": "additional_step",
+      "asset": "stone_step",
+      "rect": [
+        1132,
+        524,
+        245,
+        146
+      ],
+      "z_order": 13,
+      "visible": false,
+      "group": "architecture",
+      "opacity": 1
+    },
+    {
+      "id": "counter",
+      "asset": "merchant_counter",
+      "rect": [
+        628,
+        351,
+        568,
+        250
+      ],
+      "z_order": 22,
+      "visible": true,
+      "group": "furniture",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:counter",
+        "label": "Counter"
+      }
+    },
+    {
+      "id": "main_table",
+      "asset": "center_table",
+      "rect": [
+        620,
+        621,
+        433,
+        178
+      ],
+      "z_order": 34,
+      "visible": true,
+      "group": "furniture",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:table",
+        "label": "Main Table"
+      }
+    },
+    {
+      "id": "shopkeeper",
+      "sprite_animation": "idle",
+      "rect": [
+        782,
+        200,
+        244,
+        184
+      ],
+      "z_order": 17,
+      "visible": true,
+      "group": "characters",
+      "interaction": {
+        "cursor": "pointer",
+        "action": "dialogue:shopkeeper",
+        "label": "Talk to shopkeeper"
+      }
+    },
+    {
+      "id": "compass",
+      "asset": "compass_open",
+      "rect": [
+        754,
+        294,
+        105,
+        96
+      ],
+      "z_order": 24,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:compass",
+        "label": "Compass"
+      }
+    },
+    {
+      "id": "parcel_on_counter",
+      "asset": "parcel_large",
+      "rect": [
+        880,
+        333,
+        91,
+        77
+      ],
+      "z_order": 24,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:package",
+        "label": "Parcel On Counter"
+      }
+    },
+    {
+      "id": "counter_lantern",
+      "asset": "lantern_small",
+      "rect": [
+        1090,
+        305,
+        75,
+        124
+      ],
+      "z_order": 25,
+      "visible": true,
+      "group": "lighting",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "toggle:lantern",
+        "label": "Counter Lantern"
+      }
+    },
+    {
+      "id": "counter_runner",
+      "asset": "counter_runner",
+      "rect": [
+        857,
+        374,
+        110,
+        120
+      ],
+      "z_order": 25,
+      "visible": false,
+      "group": "decor",
+      "opacity": 0.95
+    },
+    {
+      "id": "shelf_bottle_teal",
+      "asset": "bottle_teal_tall",
+      "rect": [
+        295,
+        199,
+        59,
+        110
+      ],
+      "z_order": 25,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:shelf_bottle_teal",
+        "label": "Shelf Bottle Teal"
+      }
+    },
+    {
+      "id": "shelf_bottle_amber",
+      "asset": "bottle_amber",
+      "rect": [
+        388,
+        213,
+        59,
+        85
+      ],
+      "z_order": 25,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:shelf_bottle_amber",
+        "label": "Shelf Bottle Amber"
+      }
+    },
+    {
+      "id": "shelf_gem",
+      "asset": "gem_blue",
+      "rect": [
+        215,
+        329,
+        112,
+        95
+      ],
+      "z_order": 26,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:shelf_gem",
+        "label": "Shelf Gem"
+      }
+    },
+    {
+      "id": "shelf_chest",
+      "asset": "treasure_chest",
+      "rect": [
+        370,
+        420,
+        99,
+        84
+      ],
+      "z_order": 26,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:shelf_chest",
+        "label": "Shelf Chest"
+      }
+    },
+    {
+      "id": "shelf_jar",
+      "asset": "ceramic_jar",
+      "rect": [
+        260,
+        427,
+        93,
+        91
+      ],
+      "z_order": 26,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:shelf_jar",
+        "label": "Shelf Jar"
+      }
+    },
+    {
+      "id": "shelf_rope",
+      "asset": "rope_coil_large",
+      "rect": [
+        145,
+        451,
+        104,
+        80
+      ],
+      "z_order": 26,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:shelf_rope",
+        "label": "Shelf Rope"
+      }
+    },
+    {
+      "id": "wall_lantern",
+      "asset": "lantern_wall",
+      "rect": [
+        138,
+        196,
+        114,
+        186
+      ],
+      "z_order": 29,
+      "visible": true,
+      "group": "lighting",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "toggle:lantern",
+        "label": "Wall Lantern"
+      }
+    },
+    {
+      "id": "rope_net",
+      "asset": "rope_net",
+      "rect": [
+        224,
+        25,
+        151,
+        190
+      ],
+      "z_order": 30,
+      "visible": true,
+      "group": "decor",
+      "opacity": 1
+    },
+    {
+      "id": "wall_buoy",
+      "asset": "red_buoy",
+      "rect": [
+        365,
+        87,
+        48,
+        103
+      ],
+      "z_order": 30,
+      "visible": true,
+      "group": "decor",
+      "opacity": 1
+    },
+    {
+      "id": "wall_rope",
+      "asset": "hanging_rope",
+      "rect": [
+        1210,
+        155,
+        105,
+        180
+      ],
+      "z_order": 30,
+      "visible": true,
+      "group": "decor",
+      "opacity": 1
+    },
+    {
+      "id": "shell",
+      "asset": "conch_shell",
+      "rect": [
+        645,
+        580,
+        125,
+        97
+      ],
+      "z_order": 40,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:shell",
+        "label": "Shell"
+      }
+    },
+    {
+      "id": "boat",
+      "asset": "toy_sailboat",
+      "rect": [
+        785,
+        527,
+        118,
+        151
+      ],
+      "z_order": 41,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:boat",
+        "label": "Boat"
+      }
+    },
+    {
+      "id": "table_bottle",
+      "asset": "bottle_teal_short",
+      "rect": [
+        918,
+        578,
+        60,
+        100
+      ],
+      "z_order": 41,
+      "visible": true,
+      "group": "merchandise",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:table_bottle",
+        "label": "Table Bottle"
+      }
+    },
+    {
+      "id": "front_ledge",
+      "asset": "foreground_ledge",
+      "rect": [
+        0,
+        842,
+        1448,
+        248
+      ],
+      "z_order": 90,
+      "visible": true,
+      "group": "foreground",
+      "opacity": 1
+    },
+    {
+      "id": "foreground_books",
+      "asset": "foreground_books",
+      "rect": [
+        118,
+        863,
+        166,
+        126
+      ],
+      "z_order": 91,
+      "visible": true,
+      "group": "foreground",
+      "opacity": 1
+    },
+    {
+      "id": "foreground_lantern",
+      "asset": "foreground_lantern",
+      "rect": [
+        315,
+        738,
+        153,
+        252
+      ],
+      "z_order": 92,
+      "visible": true,
+      "group": "lighting",
+      "opacity": 1,
+      "interaction": {
+        "cursor": "pointer",
+        "action": "toggle:lantern",
+        "label": "Foreground Lantern"
+      }
+    },
+    {
+      "id": "foreground_rope",
+      "asset": "foreground_rope",
+      "rect": [
+        946,
+        889,
+        133,
+        94
+      ],
+      "z_order": 91,
+      "visible": true,
+      "group": "foreground",
+      "opacity": 1
+    },
+    {
+      "id": "foreground_plant",
+      "asset": "foreground_plant",
+      "rect": [
+        1045,
+        830,
+        181,
+        172
+      ],
+      "z_order": 92,
+      "visible": true,
+      "group": "foreground",
+      "opacity": 1
+    }
+  ],
+  "animations": {
+    "shopkeeper": {
+      "idle": {
+        "frames": [
+          "art/characters/shopkeeper/idle_00.png",
+          "art/characters/shopkeeper/idle_01.png",
+          "art/characters/shopkeeper/idle_02.png",
+          "art/characters/shopkeeper/idle_03.png",
+          "art/characters/shopkeeper/idle_04.png",
+          "art/characters/shopkeeper/idle_05.png"
+        ],
+        "fps": 6,
+        "loop": true,
+        "frame_dimensions": [
+          242,
+          181
+        ]
+      },
+      "talk": {
+        "frames": [
+          "art/characters/shopkeeper/talk_00.png",
+          "art/characters/shopkeeper/talk_01.png",
+          "art/characters/shopkeeper/talk_02.png",
+          "art/characters/shopkeeper/talk_03.png",
+          "art/characters/shopkeeper/talk_04.png",
+          "art/characters/shopkeeper/talk_05.png"
+        ],
+        "fps": 8,
+        "loop": true,
+        "frame_dimensions": [
+          242,
+          181
+        ]
+      },
+      "greet": {
+        "frames": [
+          "art/characters/shopkeeper/greet_00.png",
+          "art/characters/shopkeeper/greet_01.png",
+          "art/characters/shopkeeper/greet_02.png",
+          "art/characters/shopkeeper/greet_03.png",
+          "art/characters/shopkeeper/greet_04.png",
+          "art/characters/shopkeeper/greet_05.png"
+        ],
+        "fps": 8,
+        "loop": true,
+        "frame_dimensions": [
+          242,
+          181
+        ]
+      },
+      "point": {
+        "frames": [
+          "art/characters/shopkeeper/point_00.png",
+          "art/characters/shopkeeper/point_01.png",
+          "art/characters/shopkeeper/point_02.png",
+          "art/characters/shopkeeper/point_03.png",
+          "art/characters/shopkeeper/point_04.png",
+          "art/characters/shopkeeper/point_05.png"
+        ],
+        "fps": 8,
+        "loop": true,
+        "frame_dimensions": [
+          242,
+          181
+        ]
+      },
+      "trade": {
+        "frames": [
+          "art/characters/shopkeeper/trade_00.png",
+          "art/characters/shopkeeper/trade_01.png",
+          "art/characters/shopkeeper/trade_02.png",
+          "art/characters/shopkeeper/trade_03.png",
+          "art/characters/shopkeeper/trade_04.png",
+          "art/characters/shopkeeper/trade_05.png"
+        ],
+        "fps": 8,
+        "loop": false,
+        "frame_dimensions": [
+          242,
+          181
+        ]
+      },
+      "expressions": {
+        "frames": [
+          "art/characters/shopkeeper/expressions_00.png",
+          "art/characters/shopkeeper/expressions_01.png",
+          "art/characters/shopkeeper/expressions_02.png",
+          "art/characters/shopkeeper/expressions_03.png",
+          "art/characters/shopkeeper/expressions_04.png",
+          "art/characters/shopkeeper/expressions_05.png"
+        ],
+        "fps": 6,
+        "loop": false,
+        "frame_dimensions": [
+          242,
+          181
+        ]
+      }
+    }
+  },
+  "states": {
+    "door": "closed",
+    "lanterns": "on",
+    "shopkeeper_animation": "idle"
+  },
+  "assets": {
+    "left_shelf": {
+      "file": "art/furniture/left_shelf.png",
+      "dimensions": [
+        517,
+        579
+      ],
+      "source_sheet": "faceted_harbor_shop_asset_sprite_sheet.png",
+      "source_region": [
+        12,
+        0,
+        542,
+        583
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "merchant_counter": {
+      "file": "art/furniture/merchant_counter.png",
+      "dimensions": [
+        782,
+        316
+      ],
+      "source_sheet": "faceted_harbor_shop_asset_sprite_sheet.png",
+      "source_region": [
+        565,
+        41,
+        1384,
+        382
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "center_table": {
+      "file": "art/furniture/center_table.png",
+      "dimensions": [
+        480,
+        191
+      ],
+      "source_sheet": "faceted_harbor_shop_asset_sprite_sheet.png",
+      "source_region": [
+        527,
+        358,
+        1034,
+        578
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "door_closed": {
+      "file": "art/furniture/door_closed.png",
+      "dimensions": [
+        315,
+        440
+      ],
+      "source_sheet": "faceted_harbor_shop_asset_sprite_sheet.png",
+      "source_region": [
+        15,
+        576,
+        349,
+        1034
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "door_open": {
+      "file": "art/furniture/door_open.png",
+      "dimensions": [
+        307,
+        451
+      ],
+      "source_sheet": "faceted_harbor_shop_asset_sprite_sheet.png",
+      "source_region": [
+        353,
+        574,
+        683,
+        1042
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "red_rug": {
+      "file": "art/furniture/red_rug.png",
+      "dimensions": [
+        708,
+        236
+      ],
+      "source_sheet": "faceted_harbor_shop_asset_sprite_sheet.png",
+      "source_region": [
+        676,
+        582,
+        1414,
+        838
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "stone_step": {
+      "file": "art/furniture/stone_step.png",
+      "dimensions": [
+        557,
+        140
+      ],
+      "source_sheet": "faceted_harbor_shop_asset_sprite_sheet.png",
+      "source_region": [
+        770,
+        866,
+        1350,
+        1044
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "lantern_wall": {
+      "file": "art/props/lantern_wall.png",
+      "dimensions": [
+        251,
+        286
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        12,
+        40,
+        297,
+        354
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "lantern_small": {
+      "file": "art/props/lantern_small.png",
+      "dimensions": [
+        139,
+        243
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        339,
+        69,
+        479,
+        356
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "rope_net": {
+      "file": "art/props/rope_net.png",
+      "dimensions": [
+        336,
+        299
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        449,
+        0,
+        831,
+        342
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "red_buoy": {
+      "file": "art/props/red_buoy.png",
+      "dimensions": [
+        100,
+        142
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        845,
+        1,
+        956,
+        367
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "bottle_teal_tall": {
+      "file": "art/props/bottle_teal_tall.png",
+      "dimensions": [
+        121,
+        287
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        970,
+        24,
+        1135,
+        343
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "bottle_amber": {
+      "file": "art/props/bottle_amber.png",
+      "dimensions": [
+        106,
+        181
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        1131,
+        96,
+        1262,
+        352
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "bottle_teal_short": {
+      "file": "art/props/bottle_teal_short.png",
+      "dimensions": [
+        120,
+        218
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        1238,
+        86,
+        1409,
+        348
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "gem_blue": {
+      "file": "art/props/gem_blue.png",
+      "dimensions": [
+        187,
+        149
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        31,
+        358,
+        258,
+        567
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "treasure_chest": {
+      "file": "art/props/treasure_chest.png",
+      "dimensions": [
+        229,
+        197
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        257,
+        352,
+        486,
+        569
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "ceramic_jar": {
+      "file": "art/props/ceramic_jar.png",
+      "dimensions": [
+        160,
+        168
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        475,
+        366,
+        675,
+        564
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "rope_coil_large": {
+      "file": "art/props/rope_coil_large.png",
+      "dimensions": [
+        235,
+        124
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        668,
+        374,
+        937,
+        564
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "rope_coil_small": {
+      "file": "art/props/rope_coil_small.png",
+      "dimensions": [
+        169,
+        78
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        920,
+        372,
+        1123,
+        572
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "compass_open": {
+      "file": "art/props/compass_open.png",
+      "dimensions": [
+        211,
+        185
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        1124,
+        330,
+        1367,
+        574
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "crate_large": {
+      "file": "art/props/crate_large.png",
+      "dimensions": [
+        256,
+        228
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        5,
+        545,
+        287,
+        804
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "crate_medium": {
+      "file": "art/props/crate_medium.png",
+      "dimensions": [
+        189,
+        176
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        274,
+        586,
+        480,
+        791
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "crate_small": {
+      "file": "art/props/crate_small.png",
+      "dimensions": [
+        120,
+        131
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        463,
+        625,
+        607,
+        789
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "parcel_large": {
+      "file": "art/props/parcel_large.png",
+      "dimensions": [
+        215,
+        171
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        591,
+        587,
+        844,
+        784
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "parcel_medium": {
+      "file": "art/props/parcel_medium.png",
+      "dimensions": [
+        151,
+        133
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        827,
+        606,
+        1007,
+        780
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "parcel_small": {
+      "file": "art/props/parcel_small.png",
+      "dimensions": [
+        113,
+        95
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        1004,
+        635,
+        1138,
+        775
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "counter_runner": {
+      "file": "art/props/counter_runner.png",
+      "dimensions": [
+        267,
+        202
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        1112,
+        549,
+        1422,
+        786
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "toy_sailboat": {
+      "file": "art/props/toy_sailboat.png",
+      "dimensions": [
+        237,
+        254
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        31,
+        782,
+        326,
+        1065
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "conch_shell": {
+      "file": "art/props/conch_shell.png",
+      "dimensions": [
+        196,
+        148
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        334,
+        850,
+        542,
+        1060
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "books_stack": {
+      "file": "art/props/books_stack.png",
+      "dimensions": [
+        243,
+        165
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        531,
+        862,
+        787,
+        1064
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "potted_plant": {
+      "file": "art/props/potted_plant.png",
+      "dimensions": [
+        243,
+        239
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        808,
+        797,
+        1117,
+        1067
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "hanging_rope": {
+      "file": "art/props/hanging_rope.png",
+      "dimensions": [
+        197,
+        229
+      ],
+      "source_sheet": "harbor_shop_props_asset_sheet.png",
+      "source_region": [
+        1100,
+        771,
+        1393,
+        1071
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "foreground_lantern": {
+      "file": "art/effects/foreground_lantern.png",
+      "dimensions": [
+        192,
+        283
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        90,
+        4,
+        339,
+        312
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "foreground_books": {
+      "file": "art/effects/foreground_books.png",
+      "dimensions": [
+        259,
+        157
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        358,
+        7,
+        660,
+        300
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "foreground_rope": {
+      "file": "art/effects/foreground_rope.png",
+      "dimensions": [
+        245,
+        129
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        733,
+        83,
+        1046,
+        323
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "foreground_plant": {
+      "file": "art/effects/foreground_plant.png",
+      "dimensions": [
+        265,
+        253
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        1043,
+        0,
+        1389,
+        316
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "rain_glass": {
+      "file": "art/effects/rain_glass.png",
+      "dimensions": [
+        822,
+        340
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        40,
+        280,
+        884,
+        626
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "glow_large": {
+      "file": "art/effects/glow_large.png",
+      "dimensions": [
+        397,
+        316
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        878,
+        284,
+        1275,
+        600
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "glow_small": {
+      "file": "art/effects/glow_small.png",
+      "dimensions": [
+        130,
+        138
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        1252,
+        380,
+        1382,
+        562
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "contact_shadow_large": {
+      "file": "art/effects/contact_shadow_large.png",
+      "dimensions": [
+        537,
+        124
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        79,
+        622,
+        619,
+        762
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "contact_shadow_medium": {
+      "file": "art/effects/contact_shadow_medium.png",
+      "dimensions": [
+        298,
+        92
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        595,
+        639,
+        894,
+        755
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "contact_shadow_small": {
+      "file": "art/effects/contact_shadow_small.png",
+      "dimensions": [
+        173,
+        61
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        871,
+        653,
+        1044,
+        750
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "window_light_patch": {
+      "file": "art/effects/window_light_patch.png",
+      "dimensions": [
+        403,
+        154
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        1012,
+        591,
+        1415,
+        745
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    },
+    "foreground_ledge": {
+      "file": "art/effects/foreground_ledge.png",
+      "dimensions": [
+        1426,
+        330
+      ],
+      "source_sheet": "low_poly_harbor_shop_asset_sheet.png",
+      "source_region": [
+        1,
+        716,
+        1438,
+        1086
+      ],
+      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+    }
+  },
+  "limitations": [
+    "The generated components were created separately and are not guaranteed to register pixel-perfectly with the assembled preview.",
+    "Native art is 1448x1086 (4:3). Desktop 16:9 defaults to contain without stretch; this is not a fully painted 16:9 extension.",
+    "Camera-locked illustrated sprites have painted-in perspective and baked lighting; true free-camera 3D geometry has not been generated.",
+    "Some transparent sprites may exhibit color-fringe/matte artifacts and need manual cleanup.",
+    "Hit regions are image-rectangle approximations, not precise alpha masks or 3D collider meshes.",
+    "Shopkeeper animations are generated key poses, not guaranteed seamless authored cycles."
+  ]
+}
