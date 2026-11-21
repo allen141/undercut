@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   applyCommand, CUSTOMERS_PER_DAY, inventoryValue, newGame, quantity, reputationFor,
-  REPUTATION_TIERS, RuleError, TOWNS, upgradeState, vendorOffersForTown, vendorsInTown, WINDOW_SLOT_INDEX,
+  REPUTATION_TIERS, RuleError, GOODS, TOWNS, upgradeState, vendorOffersForTown, vendorsInTown, WINDOW_SLOT_INDEX,
   type LegacyState, type State, type VendorOffer,
 } from './index.js';
 
@@ -285,4 +285,35 @@ test('legacy snapshots retain their rules version, phase, inventory, layout and 
   const resumed = upgradeState(afterRollback);
   assert.deepEqual(resumed.customerResults, []);
   assert.deepEqual(Object.keys(resumed.vendorOffers), vendorsInTown('forge').map(({ id }) => id));
+});
+
+test('ledger journal archives market, purchases, display choices, customers and daily results', () => {
+  const fresh = newGame(37);
+  let state = chooseTown(fresh);
+  const townEvent = state.journal!.find(event => event.type === 'townChosen');
+  assert.ok(townEvent && townEvent.type === 'townChosen');
+  assert.equal(townEvent.townId, 'meadow');
+  assert.equal(townEvent.market.length, GOODS.length);
+  assert.ok(townEvent.market.some(good => good.vendors.length > 0 && good.wholesalePrice !== null));
+
+  state = visit(state);
+  const offer = getOffer(state, item => item.kind === 'regular');
+  state = buy(state, offer, 1);
+  assert.ok(state.journal!.some(event => event.type === 'stockBought' && event.vendorId === 'meadow-generalist'));
+  state = applyCommand(state, { type: 'leaveVendor' });
+  state = applyCommand(state, { type: 'finishBuying' });
+  state = applyCommand(state, { type: 'shelf', slot: 0, goodId: offer.goodId, price: 10_000 });
+  state = openShop(state);
+  assert.ok(state.journal!.some(event => event.type === 'shopOpened' && event.shelves[0].goodId === offer.goodId));
+
+  state.customers = Array.from({ length: CUSTOMERS_PER_DAY }, () => ({ goodId: 'iron', budget: 1 }));
+  state = applyCommand(state, { type: 'serve' });
+  assert.equal(state.phase, 'report');
+  assert.equal(state.journal!.filter(event => event.type === 'customerServed').length, CUSTOMERS_PER_DAY);
+  assert.ok(state.journal!.some(event => event.type === 'dayClosed' && event.result.day === 1));
+
+  const legacy = JSON.parse(JSON.stringify(fresh)) as LegacyState;
+  delete legacy.journal;
+  const resumed = applyCommand(legacy, { type: 'chooseTown', townId: 'forge' });
+  assert.equal(resumed.journal?.[0]?.type, 'townChosen');
 });

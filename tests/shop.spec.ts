@@ -78,6 +78,16 @@ async function createCampaign(page: Page, name: string) {
   await page.getByRole('button', { name: 'Create campaign' }).click();
   await expect(shopCanvas(page)).toBeVisible();
   await expectRevision(page, 0);
+  const ledger = page.getByRole('dialog', { name: 'The shop ledger' });
+  await expect(ledger).toBeVisible();
+  const pages = ledger.getByRole('navigation', { name: 'Ledger pages' });
+  for (const title of ['Inventory', 'Performance', 'Locations & prices', 'Events', 'Newspapers']) {
+    await pages.getByRole('button', { name: title, exact: true }).click();
+    await expect(ledger.locator('.ledger-content > h2')).toHaveText(title);
+  }
+  await ledger.getByRole('button', { name: 'Continue trading' }).first().click();
+  await expect(ledger).toHaveCount(0);
+  await expect(page.locator('.ledger-menu')).toBeVisible();
 }
 
 async function campaignSnapshot(page: Page) {
@@ -101,6 +111,8 @@ async function expectStock(page: Page, good: string, amount: number) {
 }
 
 async function chooseTown(page: Page, name: string, keyboard = false) {
+  const ledger = page.getByRole('dialog', { name: 'The shop ledger' });
+  if (await ledger.count()) await ledger.getByRole('button', { name: 'Continue trading' }).first().click();
   const preview = 'Preview ' + name;
   const confirm = 'Choose ' + name;
   if (await action(page, 'Choose today’s town').count()) await activate(page, 'Choose today’s town');
@@ -309,7 +321,7 @@ async function screenshot(page: Page, path: string) {
     elements.filter(element => {
       const style = getComputedStyle(element);
       const bounds = element.getBoundingClientRect();
-      return bounds.width > 0 && bounds.height > 0 && style.visibility === 'visible' &&
+      return !element.closest('.ledger-menu') && bounds.width > 0 && bounds.height > 0 && style.visibility === 'visible' &&
         style.display !== 'none' && style.opacity !== '0' && style.clipPath === 'none';
     }).map(element => element.textContent?.trim()),
   );
