@@ -1,19 +1,21 @@
-import { AccessibilitySystem, Application, Container, Graphics, Rectangle, Text, extensions } from 'pixi.js';
+import { AccessibilitySystem, Application, Container, Graphics, Rectangle, Sprite, Text, extensions } from 'pixi.js';
 import 'pixi.js/browser';
 import 'pixi.js/unsafe-eval';
 import {
   CUSTOMERS_PER_DAY, GOODS, MAX_VENDOR_VISITS, REPUTATION_TIERS, TOWNS, WINDOW_SLOT_INDEX,
   inventoryValue, priceRange, quantity, reputationFor, vendorOffersForTown, vendorsInTown, type CustomerResult, type GoodId,
+  newspaperForDay,
 } from '@undercut/game-core';
 import type { BusinessPresentation, GameProps } from './Game.js';
-import { drawCoin, drawCustomer, drawGood, drawRoom, phaseBooks } from './ShopArt.js';
+import { customerPortrait, dialTargets, drawDial, drawRoom, phaseBooks, setCoin, setGood } from './ShopArt.js';
+import { loadShopTextures, placeSprite, skin } from './ShopAssets.js';
 import { roomLayout, shopScale, type Bounds } from './ShopLayout.js';
 
 extensions.remove(AccessibilitySystem);
 
 type Rect = Bounds;
 type Action = { id: string; label: string; box: Rect; run: () => void; disabled?: boolean; active?: boolean };
-type Panel = 'book' | 'shelf' | 'price' | 'stock' | 'journal';
+type Panel = 'book' | 'shelf' | 'price' | 'stock' | 'journal' | 'newspaper';
 type Page = 'summary' | 'vendors' | 'activity' | 'stock';
 type Playback = { index: number; until: number; start: number; revealAfter: number; revealed: boolean; negotiated: boolean };
 export type ShopController = { update(): void; destroy(): void };
@@ -27,9 +29,14 @@ const gold = 0xf0bd73;
 const ink = 0x281f2a;
 const paperInk = 0x38262e;
 const paperMuted = 0x614941;
+const localTrend = 0x315965;
+const globalTrend = 0x94674f;
 const journalTheme = { cover: 0x632e44, edge: 0xc18a58, page: 0xf5dfbb };
+const newspaperTheme = { cover: 0x57433a, edge: 0xd2a66e, page: 0xf3e2c2 };
 const journalGoods = { meadow: 'grain', forge: 'iron', harbor: 'cloth' } as const;
 const money = (n: number) => `${n}g`;
+const quotedPrice = (n: number) => money(Math.round(n * 10) / 10);
+const average = (values: number[]) => values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
 const nameOf = (id: GoodId) => GOODS.find(item => item.id === id)!.name;
 const rect = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w, h });
 const displayName = (slot: number) => slot === WINDOW_SLOT_INDEX ? 'Window display' : `Floor display ${slot + 1}`;
@@ -60,16 +67,21 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     failIfMajorPerformanceCaveat: false, autoDensity: false, antialias: true, autoStart: false,
     resolution: Math.min(devicePixelRatio || 1, 2), background: 0x171b25,
   });
+  const textures = await loadShopTextures().catch(error => {
+    app.destroy();
+    throw error;
+  });
   host.append(app.canvas);
   app.canvas.setAttribute('aria-hidden', 'true');
   app.canvas.dataset.renderer = app.renderer.name;
 
   let previous = props().campaign;
-  let panel: Panel | null = previous.state.pendingNegotiation ? 'book' : null;
+  let panel: Panel | null = previous.state.phase === 'travel' ? 'newspaper'
+    : previous.state.pendingNegotiation ? 'book' : null;
   let page: Page = 'summary';
   let pageIndex = 0;
   let journalArticle: number | null = null;
-  let selectedTown = -1;
+  let selectedTown = 0;
   let selectedShelf = 0;
   let draftGood: GoodId | null = null;
   let draftPrice = 1;
@@ -101,15 +113,19 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const art = new Container();
   const visitArt = new Container();
-  const visitor = new Graphics();
-  const reward = new Graphics();
+  const visitor = new Container();
+  const foreground = new Container();
+  const reward = new Container();
+  const tradedGood = new Sprite();
+  const coins = Array.from({ length: 3 }, () => new Sprite(textures.coin));
+  reward.addChild(tradedGood, ...coins);
   const scene = new Container();
   const focusRing = new Graphics();
   const motion = new Graphics();
   focusRing.eventMode = 'none';
   let artKey = '';
   let visitorKey = '';
-  visitArt.addChild(visitor, reward);
+  visitArt.addChild(visitor, foreground, reward);
   visitor.on('pointertap', hurryVisitor);
   app.stage.addChild(art, visitArt, scene, focusRing, motion);
 
@@ -151,7 +167,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     motion.clear();
     if (disposed || !transition || !panel) return;
     const end = roomLayout(w, h).page;
-    const book = panel === 'journal' ? journalTheme : phaseBooks[playback ? 'open' : props().campaign.state.phase];
+    const book = panel === 'journal' ? journalTheme : panel === 'newspaper' ? newspaperTheme
+      : phaseBooks[playback ? 'open' : props().campaign.state.phase];
     const p = Math.min(1, (now - transition.start) / (transition.kind === 'open' ? 270 : 210));
     if (transition.kind === 'open' && readingLayer) readingLayer.alpha = Math.max(0, (p - .38) / .62);
     if (p < 1) {
@@ -257,7 +274,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   }
 
   function paintVisit(now: number) {
-    reward.clear();
+    tradedGood.visible = false;
+    for (const coin of coins) coin.visible = false;
     const state = props().campaign.state;
     const index = playback?.index ?? state.pendingNegotiation?.customerIndex;
     const canHurry = playback && !playback.revealed && panel === null;
@@ -271,8 +289,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const body = layout.visitor;
     const key = `${state.seed}:${state.day}:${index}:${w}:${h}`;
     if (key !== visitorKey) {
-      visitor.clear();
-      drawCustomer(visitor, body, state.seed, index);
+      visitor.removeChildren().forEach(child => child.destroy());
+      visitor.addChild(customerPortrait(textures, state.seed, index, body));
       visitor.hitArea = new Rectangle(body.x, body.y, body.w, body.h * 1.08);
       visitorKey = key;
     }
@@ -285,10 +303,11 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const elapsed = Math.max(0, now - start);
     const arrival = playback?.negotiated ? 1 : Math.min(1, elapsed / 420);
     const exit = playback ? Math.max(0, Math.min(1, 1 - (visitDuration - elapsed) / visitExitDuration)) : 0;
-    const doorway = layout.door.x + layout.door.w * .77 - (body.x + body.w / 2);
+    const doorway = layout.door.x + layout.door.w / 2 - (body.x + body.w / 2);
+    const doorDepth = layout.door.y + layout.door.h - (body.y + body.h);
     const step = Math.max((1 - arrival) ** 2, exit ** 2);
     const thinking = playback && !playback.revealed && arrival === 1 ? Math.sin(elapsed / 210) * 2 : 0;
-    visitor.position.set(doorway * step, -Math.sin(step * Math.PI * 2) * 4 + thinking);
+    visitor.position.set(doorway * step, doorDepth * step - Math.sin(step * Math.PI * 2) * 4 + thinking);
     visitor.alpha = Math.min(1, .28 + arrival * 3, 1 - exit ** 2);
 
     if (!playback?.revealed) return;
@@ -304,14 +323,14 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       const t = Math.min(1, progress / .75);
       const fromX = display.x + display.w * .18;
       const fromY = display.y + display.h * (slot === WINDOW_SLOT_INDEX ? .80 : .57);
-      drawGood(reward, result.goodId, animateArc(fromX, customerX, t), animateArc(fromY, customerY, t) -
+      setGood(tradedGood, textures, result.goodId, animateArc(fromX, customerX, t), animateArc(fromY, customerY, t) -
         Math.sin(Math.PI * t) * 24, 18);
     }
     const coinX = layout.bell.x + layout.bell.w * .5;
     const coinY = layout.bell.y + layout.bell.h * .53;
     for (let i = 0; i < 3; i++) {
       const t = Math.max(0, Math.min(1, (progress - i * .12) / .73));
-      if (t > 0 && t < 1) drawCoin(reward, animateArc(customerX, coinX, t), animateArc(customerY, coinY, t) -
+      if (t > 0 && t < 1) setCoin(coins[i], animateArc(customerX, coinX, t), animateArc(customerY, coinY, t) -
         Math.sin(Math.PI * t) * (32 + i * 12), 7, .44 + Math.abs(Math.cos(t * Math.PI * 3)) * .56);
     }
   }
@@ -360,7 +379,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       presentBusiness(nextPresentation);
       lastPresentation = nextPresentation;
     }
-    const theme = panel === 'journal' ? journalTheme : phaseBooks[phase];
+    const theme = panel === 'journal' ? journalTheme : panel === 'newspaper' ? newspaperTheme : phaseBooks[phase];
     const town = TOWNS.find(t => t.id === state.townId);
     const preview = TOWNS[selectedTown];
     const blocked = p.busy || p.pending || !p.online || !!playback;
@@ -379,13 +398,22 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       const border = options.paper ? 0xa87958 : options.active || options.primary ? gold : 0xa77a59;
       const base = options.primary ? (options.paper ? theme.cover : 0xe4ac69)
         : options.active ? (options.paper ? 0xd4b88d : 0x755143) : options.paper ? 0xf4e4c4 : 0x382a33;
+      const drawnSkin = options.paper || options.primary;
       const shape = options.hide
         ? new Graphics().roundRect(bounds.x, bounds.y, bounds.w, bounds.h, 6).stroke({ color: border, width: 2 })
-        : box(item, bounds, base, border, options.disabled ? .68 : .97);
-      if (options.hide) { shape.alpha = 0; item.addChild(shape); }
+        : drawnSkin
+          ? skin(textures[options.primary ? 'button-primary' : 'button-secondary'], bounds, 22, 16)
+          : box(item, bounds, base, border);
+      if (options.hide || drawnSkin) item.addChild(shape);
+      const alpha = options.hide ? 0 : options.disabled ? .62 : 1;
+      shape.alpha = alpha;
+      if (drawnSkin && !options.hide && options.active) {
+        item.addChild(new Graphics().roundRect(bounds.x + 3, bounds.y + 3, bounds.w - 6, bounds.h - 6, 7)
+          .stroke({ color: 0xaf6529, width: 2 }));
+      }
       if (!options.hide) text(item, options.copy ?? title, bounds.x + bounds.w / 2, bounds.y + bounds.h / 2, {
         align: 'center', max: Math.max(26, bounds.w - 10), size: narrow ? 13 : 15,
-        color: options.paper ? options.primary ? cream : paperInk : options.primary ? ink : options.disabled ? muted : cream,
+        color: options.primary ? cream : options.paper ? paperInk : options.disabled ? muted : cream,
       });
       if (!modal || layer !== scene) {
         actions.push({ id, label: title, box: bounds, run, disabled: options.disabled, active: options.active });
@@ -395,19 +423,20 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
           item.cursor = 'pointer';
           item.on('pointertap', run);
           item.on('pointerover', () => { shape.alpha = options.hide ? .58 : .82; app.render(); });
-          item.on('pointerout', () => { shape.alpha = options.hide ? 0 : 1; app.render(); });
+          item.on('pointerout', () => { shape.alpha = alpha; app.render(); });
         }
       }
       layer.addChild(item);
     }
 
-    const townId = phase === 'travel' ? preview?.id : undefined;
+    const townId = phase === 'travel' ? preview.id : undefined;
     const artShelf = panel === 'shelf' || panel === 'price' ? selectedShelf : undefined;
     const displayState = state.shelves.map(shelf => [shelf.goodId, shelf.goodId ? Math.min(5, visibleStock(shelf.goodId)) : 0]);
-    const key = JSON.stringify([w, h, phase, townId ?? state.townId, artShelf, modal, displayState]);
+    const key = JSON.stringify([w, h, phase, townId ?? state.townId, artShelf, displayState]);
     if (key !== artKey) {
       art.removeChildren().forEach(child => child.destroy({ children: true }));
-      drawRoom(art, w, h, { ...state, phase }, { townId, selectedShelf: artShelf, bookOpen: modal, stock: visibleStock });
+      foreground.removeChildren().forEach(child => child.destroy({ children: true }));
+      drawRoom(art, foreground, textures, w, h, { ...state, phase }, { townId, selectedShelf: artShelf, stock: visibleStock });
       artKey = key;
     }
 
@@ -417,7 +446,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       { copy: narrow ? '‹ Menu' : '‹ All campaigns', disabled: p.busy || !p.online });
     control(scene, 'stock', 'Inventory and gold', rect(w - margin - (narrow ? 67 : 114), 12, narrow ? 64 : 111, 44),
       () => show('stock', 'stock'), { copy: money(cash) });
-    text(scene, narrow ? `Day ${state.day} · ${town?.name ?? 'Travel'}` : `${p.campaign.name.slice(0, 36)}  /  Day ${state.day} · ${town?.name ?? 'Between towns'}`,
+    const location = phase === 'travel' ? `${preview.name} preview` : town?.name ?? 'Between towns';
+    text(scene, narrow ? `Day ${state.day} · ${location}` : `${p.campaign.name.slice(0, 36)}  /  Day ${state.day} · ${location}`,
       w / 2, 34, { align: 'center', max: w - (narrow ? 155 : 308), serif: !narrow, size: narrow ? 13 : 17 });
 
     function openBook() {
@@ -426,22 +456,26 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
 
     if (town && phase !== 'travel') {
       const journalName = `${town.name} Journal`;
-      const journalW = Math.min(155, layout.bay.x - margin - 13);
-      control(scene, 'town-journal', `Open ${journalName}`, rect(margin + 3, 67, journalW, 44), () => {
+      control(scene, 'town-journal', `Open ${journalName}`, layout.journal, () => {
         journalArticle = null;
         show('journal', 'town-journal');
       }, { copy: journalName });
     }
-
-    const bookName = { travel: 'Open destination book', prepare: 'Open wholesale book', open: 'Open business book', report: 'Day’s takings' }[phase];
-    control(scene, 'book', bookName, layout.book, openBook, { hide: true });
-    if (!modal) text(scene, phaseBooks[phase].title, layout.book.x + layout.book.w * .52, layout.book.y + layout.book.h * .50,
-      { serif: true, size: narrow ? 13 : 17, align: 'center', max: layout.book.w - 14 });
     if (phase === 'travel') {
-      control(scene, 'dial', 'Turn the door dial', layout.dial, openBook, { hide: true });
-      text(scene, 'Turn dial', layout.dial.x + layout.dial.w / 2, layout.dial.y + layout.dial.h + 9,
-        { align: 'center', size: 12, max: 70 });
+      control(scene, 'morning-paper', 'Read the morning newspaper', layout.journal,
+        () => show('newspaper', 'morning-paper'), { copy: 'Morning Gazette' });
     }
+
+    const bookName = { travel: 'Open route atlas', prepare: 'Open wholesale book', open: 'Open business book', report: 'Day’s takings' }[phase];
+    control(scene, 'book', bookName, layout.book, openBook, { hide: true });
+    if (!modal) {
+      const { x, y, w: width, h: height } = layout.book;
+      const nameplate = skin(textures['button-primary'], rect(x, y + height - 24, width, 29), 21, 12);
+      scene.addChild(nameplate);
+      text(scene, phaseBooks[phase].title, x + width / 2, y + height - 10,
+        { serif: true, size: narrow ? 13 : 16, align: 'center', max: width - 12 });
+    }
+    if (phase === 'travel' && panel && panel !== 'book') drawDial(scene, textures, layout.travelDial, preview.id, true);
     if (phase === 'prepare' && state.buyingComplete || phase === 'open') {
       layout.shelves.forEach((bounds, slot) => {
         const shelf = state.shelves[slot];
@@ -474,42 +508,41 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         (progressW - 24) * served / CUSTOMERS_PER_DAY, 6), gold, undefined, 1, 3);
     }
 
-    const focusOutcome = activeResult ?? (phase === 'report' ? latestOutcome : undefined);
     if (playback && !playback.revealed && !modal) {
       const body = layout.visitor;
       control(scene, 'hurry-visitor', 'Hurry this visitor', rect(body.x, body.y, body.w, body.h * 1.08), hurryVisitor, { hide: true });
     }
-    if (!modal && (playback || focusOutcome)) {
-      const rightEdge = layout.portrait ? w - margin : layout.bay.x - 13;
+    if (!modal && playback) {
+      const rightEdge = layout.bookBelowWall ? w - margin : layout.bay.x - 13;
       const cardW = Math.min(narrow ? 298 : 370, rightEdge - margin - 6);
       const cardX = Math.max(margin + 6, Math.min(rightEdge - cardW, layout.visitor.x - cardW * .35));
-      const cardY = layout.portrait ? layout.page.y + 26 : Math.max(116, layout.visitor.y - 112);
-      const sale = focusOutcome && latest && latest.price !== null ? latest : undefined;
-      const cardAccent = sale ? gold : focusOutcome ? 0xca9986 : 0x9ba99c;
-      const index = playback?.index ?? latest?.customerIndex ?? served - 1;
+      const cardY = layout.bookBelowWall ? layout.page.y + 26 : Math.max(116, layout.visitor.y - 112);
+      const sale = activeResult && latest && latest.price !== null ? latest : undefined;
+      const cardAccent = sale ? gold : activeResult ? 0xca9986 : 0x9ba99c;
       box(scene, rect(cardX, cardY, cardW, 103), sale ? 0x382a2d : ink, cardAccent, .97, 10);
       box(scene, rect(cardX + 1, cardY + 15, 4, 73), cardAccent, undefined, 1, 2);
-      text(scene, `Customer ${index + 1} of ${CUSTOMERS_PER_DAY}`, cardX + 14, cardY + 17, { size: 12, color: cardAccent });
-      const detail = focusOutcome ? `${focusOutcome.good} · ${focusOutcome.detail}` : 'Considering… Tap or click the visitor to hurry.';
-      text(scene, focusOutcome?.title ?? requestText, cardX + 14, cardY + 45,
+      text(scene, `Customer ${playback.index + 1} of ${CUSTOMERS_PER_DAY}`, cardX + 14, cardY + 17, { size: 12, color: cardAccent });
+      const detail = activeResult ? `${activeResult.good} · ${activeResult.detail}` : 'Considering… Tap or click the visitor to hurry.';
+      text(scene, activeResult?.title ?? requestText, cardX + 14, cardY + 45,
         { size: narrow ? 21 : 24, serif: true, max: cardW - (sale ? 121 : 28) });
       text(scene, detail, cardX + 14, cardY + 79, { size: narrow ? 13 : 14, max: cardW - (sale ? 115 : 28) });
       if (sale) {
-        const badge = new Graphics();
-        drawGood(badge, sale.goodId, cardX + cardW - 52, cardY + 48, 27);
-        drawCoin(badge, cardX + cardW - 79, cardY + 77, 9);
-        scene.addChild(badge);
+        const good = new Sprite();
+        const coin = new Sprite(textures.coin);
+        setGood(good, textures, sale.goodId, cardX + cardW - 52, cardY + 48, 27);
+        setCoin(coin, cardX + cardW - 79, cardY + 77, 9);
+        scene.addChild(good, coin);
         text(scene, `+${money(sale.price!)}`, cardX + cardW - 65, cardY + 77, { size: 19, color: gold });
       }
     }
 
     const tip = !p.online ? 'You’re offline. Reconnect to continue trading.' : p.error || (
       p.busy ? 'Saving…' : p.pending ? 'Confirm your last action.' :
-      phase === 'travel' ? 'Turn the door dial or open the atlas to choose a town.' :
+      phase === 'travel' ? 'Pick a town on the dial. Press its center to travel.' :
       phase === 'prepare' ? state.buyingComplete ? 'Set up your displays and open the shop.' : 'Open the supplier ledger to compare vendors.' :
       phase === 'open' ? latestOutcome?.line ?? state.log[served - 1] ?? 'The shop is open. Customers are on their way.' :
       'The shop is closed. Review your accounts when ready.');
-    if (!modal || !layout.portrait) {
+    if (!modal || !layout.bookBelowWall) {
       box(scene, rect(margin, h - 43, w - margin * 2, 35), ink, 0x76574b, .94);
       text(scene, tip, w / 2, h - 25, { align: 'center', max: w - margin * 2 - 14, size: narrow ? 11 : 13, color: p.error ? 0xffbcb0 : muted });
     }
@@ -524,7 +557,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       scene.addChild(overlay);
       const { page: reading, bay } = layout;
       const shade = new Graphics();
-      const right = bay.x + bay.w + 12;
+      const right = Math.min(w, bay.x + bay.w + 12);
       const bottom = bay.y + bay.h + 13;
       shade.rect(0, 0, w, bay.y - 9).rect(0, bay.y - 9, bay.x - 10, bottom - bay.y + 9)
         .rect(right, bay.y - 9, w - right, bottom - bay.y + 9).rect(0, bottom, w, h - bottom)
@@ -535,17 +568,20 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       const { x, y } = reading;
       const rw = reading.w, rh = reading.h;
       box(overlay, rect(x - 4, y + 4, rw + 8, rh + 6), 0x1a1720, undefined, .55, 12);
-      box(overlay, reading, theme.cover, theme.edge, 1, 10).eventMode = 'static';
-      box(overlay, rect(x + 6, y + 8, rw - 12, rh - 15), 0xc09872, undefined, 1, 7);
-      box(overlay, rect(x + 8, y + 4, rw - 16, rh - 17), theme.page, 0xe6be86, 1, 7);
-      box(overlay, rect(x + 13, y + 10, rw - 26, rh - 29), theme.page, 0xb98c63, 1, 6);
+      const parchment = skin(textures['panel-large'], reading, 32, 28);
+      parchment.eventMode = 'static';
+      parchment.hitArea = new Rectangle(0, 0, rw, rh);
+      overlay.addChild(parchment);
+      const grain = placeSprite(textures.parchment, rect(x + 13, y + 51, rw - 26, rh - 70));
+      grain.alpha = .28;
+      overlay.addChild(grain);
       const left = x + 20;
       const inner = rw - 40;
       const foot = rh - 64;
       const title = (copy: string, max = inner - 43) => {
         readingTitle = copy;
-        box(overlay, rect(left - 2, y + 12, max + 1, 33), theme.cover, theme.edge, 1, 4);
-        text(overlay, copy, left + 7, y + 28, { serif: true, size: narrow ? 20 : 23, max: max - 14 });
+        overlay.addChild(skin(textures['button-primary'], rect(left - 2, y + 9, max + 1, 40), 22, 15));
+        text(overlay, copy, left + 15, y + 29, { serif: true, size: narrow ? 19 : 21, max: max - 31 });
       };
       const words = (copy: string, dx: number, dy: number, options: Parameters<typeof text>[4] = {}) => {
         readingLines.push(copy);
@@ -646,6 +682,42 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
           }, { copy: `${notice.title}  ›` }));
         }
       }
+      if (panel === 'newspaper' && phase === 'travel') {
+        const issue = newspaperForDay(state.seed, state.day, state.history);
+        const excerpt = (body: string) => body.length > 108 ? `${body.slice(0, 105).trimEnd()}…` : body;
+        title('The Wandering Gazette');
+        note(`Morning edition · Day ${issue.day} · World & markets`, 66);
+        rule(82);
+        const lead = issue.articles[0];
+        words(lead.headline, 0, 103, { serif: true, size: 15, max: inner });
+        words(excerpt(lead.body), 0, 124, { size: 11, max: inner });
+        const followup = issue.articles[1];
+        words(followup.headline, 0, 163, { serif: true, size: 13, max: inner });
+        words(excerpt(followup.body), 0, 182, { size: 11, max: inner });
+        readingLines.push(`${lead.headline}. ${lead.body}`, `${followup.headline}. ${followup.body}`);
+        rule(211);
+        words('Market outlook', 0, 223, { serif: true, size: 14 });
+        words('Global average · today / projected', inner, 223,
+          { align: 'right', size: 10, color: paperMuted });
+        issue.outlook.forEach((row, index) => {
+          const good = GOODS.find(item => item.id === row.goodId)!;
+          const movement = (value: number) => value > 0 ? `+${value}` : String(value);
+          const todayArrow = row.change > 0 ? '↑' : row.change < 0 ? '↓' : '→';
+          const projectionArrow = row.projectedChange > 0 ? '↑' : row.projectedChange < 0 ? '↓' : '→';
+          const copy = `${money(row.current)} ${todayArrow}${movement(row.change)}  ·  ${money(row.projected)} ${projectionArrow}${movement(row.projectedChange)}`;
+          words(good.name, 0, 244 + index * 17, { size: 11, max: inner * .36 });
+          words(copy, inner, 244 + index * 17,
+            { align: 'right', size: 11, color: paperMuted, max: inner * .64 });
+          readingLines.push(`${good.name}: ${money(row.current)}, change ${movement(row.change)}; projected ${money(row.projected)}, change ${movement(row.projectedChange)}.`);
+        });
+        primary('open-atlas', 'Choose today’s town', () => {
+          focus('preview-meadow');
+          panel = 'book';
+          page = 'summary';
+          animate('open');
+          render();
+        }, { copy: 'Choose today’s town' });
+      }
       if (panel === 'stock') {
         title('Stock chest');
         GOODS.forEach((good, i) => line(good.name, String(visibleStock(good.id)), 65 + i * 32));
@@ -655,36 +727,67 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       }
       if (panel === 'book' && phase === 'travel') {
         title('Route Atlas');
-        const cell = (inner - 12) / 3;
-        TOWNS.forEach((destination, i) => button(`preview-${destination.id}`, `Preview ${destination.name}`,
-          i * (cell + 6), 56, cell, () => {
-            selectedTown = i;
-            animate('turn');
-            render();
-          }, { copy: destination.name, active: i === selectedTown }));
-        const destination = preview ?? TOWNS[0];
-        const rates = Object.entries(vendorOffersForTown(state, destination.id)).flatMap(([vendorId, offers]) =>
-          offers.filter(offer => reputationFor(state, vendorId).tier >= (offer.requiredTier ?? 0)));
-        note(`${destination.specialty} · ${money(state.gold)} available`, 115);
-        rule(129);
-        const columns = [0, inner * .39, inner * .59, inner * .80, inner - 2];
-        ['Good', 'Buy', 'Demand', 'Budget', 'Held'].forEach((label, i) =>
-          words(label, columns[i], 144, { align: i === 0 ? 'left' : i === 4 ? 'right' : 'center', color: paperMuted, size: 11 }));
+        const days = Array.from({ length: Math.min(state.day, 5) }, (_, i) => Math.max(1, state.day - 4) + i);
+        const markets = TOWNS.map(town => days.map(day => Object.values(vendorOffersForTown({
+          seed: state.seed, day, vendorReputation: {},
+        }, town.id)).flat().filter(offer => offer.kind === 'regular')));
+        const allOffers = markets.flat(2);
+        note(`${preview.name} · ${preview.specialty} · ${money(state.gold)} available`, 66);
+        rule(82);
+        const columns = [0, inner * .355, inner * .596, inner * .80, inner];
+        ['Good', 'Price trend', 'Demand', 'Budget', 'Held'].forEach((label, i) =>
+          text(overlay, label, left + columns[i], y + 100,
+            { align: i === 0 ? 'left' : i === 4 ? 'right' : 'center', color: paperMuted, size: 11 }));
+        const rowHeight = layout.bookBelowWall ? 32 : 34;
         GOODS.forEach((good, i) => {
-          const prices = rates.filter(offer => offer.goodId === good.id).map(offer => offer.unitCost);
-          const low = Math.min(...prices), high = Math.max(...prices);
-          const supply = !prices.length ? '—' : low === high ? money(low) : `${low}–${high}g`;
-          const range = priceRange(destination, good.id);
-          const demand = destination.demand[good.id];
-          const row = [good.name, supply,
-            demand >= 1.2 ? 'High' : demand <= .9 ? 'Low' : 'Mid', `${range.min}–${range.max}g`, String(quantity(state, good.id))];
-          row.forEach((value, j) => words(value, columns[j], 170 + i * 25, {
-            size: 12, align: j === 0 ? 'left' : j === 4 ? 'right' : 'center',
-          }));
+          const prices = (offers: typeof allOffers) => offers.filter(offer => offer.goodId === good.id).map(offer => offer.unitCost);
+          const localPrices = markets[selectedTown].map(offers => average(prices(offers)));
+          const benchmark = average(prices(allOffers));
+          const current = localPrices.at(-1) ?? null;
+          const rowY = 127 + i * rowHeight;
+          const plot = rect(left + inner * .205, y + rowY - 9, inner * .205, 18);
+          const samples = [...localPrices, benchmark].filter(price => price !== null);
+          const min = Math.min(...samples) - .5;
+          const max = Math.max(...samples) + .5;
+          const chart = new Graphics();
+          const heightAt = (price: number) => plot.y + plot.h * (max - price) / (max - min);
+          if (benchmark !== null) {
+            const baseline = heightAt(benchmark);
+            for (let dx = 0; dx < plot.w; dx += 7) {
+              chart.moveTo(plot.x + dx, baseline).lineTo(plot.x + Math.min(dx + 4, plot.w), baseline);
+            }
+            chart.stroke({ color: globalTrend, width: 1.5 });
+          }
+          let previous: { x: number; y: number } | undefined;
+          localPrices.forEach((price, index) => {
+            if (price === null) {
+              previous = undefined;
+              return;
+            }
+            const point = { x: plot.x + plot.w * (days.length === 1 ? .5 : index / (days.length - 1)), y: heightAt(price) };
+            if (previous) chart.moveTo(previous.x, previous.y).lineTo(point.x, point.y).stroke({ color: localTrend, width: 1.8 });
+            chart.circle(point.x, point.y, 2.1).fill(localTrend);
+            previous = point;
+          });
+          overlay.addChild(chart);
+          const range = priceRange(preview, good.id);
+          const demandValue = preview.demand[good.id];
+          const demand = demandValue >= 1.2 ? 'High' : demandValue <= .9 ? 'Low' : 'Mid';
+          const budget = `${range.min}–${range.max}g`;
+          const held = quantity(state, good.id);
+          [good.name, current === null ? '—' : quotedPrice(current), demand, budget, String(held)].forEach((value, j) =>
+            text(overlay, value, left + (j === 1 ? inner * .524 : columns[j]), y + rowY,
+              { color: paperInk, size: 12, align: j === 0 ? 'left' : j === 1 || j === 4 ? 'right' : 'center' }));
+          const history = localPrices.map((price, index) => `Day ${days[index]}, ${price === null ? 'unavailable' : quotedPrice(price)}`).join('. ');
+          readingLines.push(`${good.name}. ${history}. Global average ${benchmark === null ? 'unavailable' : quotedPrice(benchmark)}. ` +
+            `Demand ${demand.toLowerCase()}, budget ${budget}, held ${held}.`);
         });
-        note('— indicates no local supply', 316);
-        primary('choose-town', `Choose ${destination.name}`, () => p.send({ type: 'chooseTown', townId: destination.id }),
-          { disabled: blocked || !preview });
+        const legendY = 131 + GOODS.length * rowHeight;
+        rule(legendY - 16);
+        const period = days.length === 1 ? `Day ${days[0]}` : `Days ${days[0]}–${days.at(-1)}`;
+        note(`${period} · Solid town avg · Dashed global avg`, legendY);
+        note('— No local regular price', legendY + 18);
+        note('Pick a town on the dial. Press its center to travel.', legendY + 41);
       }
 
       if (panel === 'book' && phase === 'prepare' && !state.buyingComplete) {
@@ -954,9 +1057,22 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       if (p.pending && p.online && !p.busy) {
         button('retry', 'Confirm last action', 0, foot, inner, () => p.send(), { primary: true });
       }
-      if (layout.portrait && (p.error || !p.online || p.busy)) {
+      if (layout.bookBelowWall && (p.error || !p.online || p.busy)) {
         text(overlay, tip, x + rw / 2, y + rh - 12, { align: 'center', color: paperInk, size: 10, max: inner });
       }
+    }
+
+    if (phase === 'travel' && (!panel || panel === 'book')) {
+      const dialLayer = new Container();
+      scene.addChild(dialLayer);
+      drawDial(dialLayer, textures, layout.travelDial, preview.id, true);
+      const targets = dialTargets(layout.travelDial);
+      TOWNS.forEach((town, i) => control(dialLayer, `preview-${town.id}`, `Preview ${town.name}`, targets.towns[town.id], () => {
+        selectedTown = i;
+        render();
+      }, { hide: true, active: i === selectedTown }));
+      control(dialLayer, 'choose-town', `Choose ${preview.name}`, targets.confirm,
+        () => p.send({ type: 'chooseTown', townId: preview.id }), { hide: true, disabled: blocked });
     }
 
     keyboard.setAttribute('aria-label', modal ? `${readingTitle} controls` : 'Shop controls');
@@ -1098,15 +1214,17 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       } else if (current.pendingNegotiation || prior.phase === 'open' && current.phase === 'report') {
         renderOutcome = true;
       } else if (current.phase !== prior.phase) {
-        focus(current.phase === 'travel' ? 'dial' : 'book');
-        panel = null;
+        focus(current.phase === 'travel' ? 'preview-meadow' : 'book');
+        panel = current.phase === 'travel' ? 'newspaper' : null;
+        returnFocus = 'book';
         viewedVendor = '';
         selectedOffer = '';
-        selectedTown = -1;
+        selectedTown = 0;
         page = 'summary';
         pageIndex = 0;
         transition = undefined;
         motion.clear();
+        if (panel) animate('open');
       } else if (current.buyingComplete !== prior.buyingComplete) {
         focus('setup-0');
         pageIndex = 0;

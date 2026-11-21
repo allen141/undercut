@@ -2,14 +2,14 @@
 
 ## Entry and decision
 
-The destination book is available at the start of a campaign and after **Next Day**. The shop door stays closed to customers while the player selects Meadow, Forge, or Harbor. The player may stay in the same town on consecutive days.
+The morning newspaper opens automatically at the start of each day. After reading it, the player opens the Route Atlas, whose dial enlarges above the closed shop door. The player can preview Meadow, Forge, or Harbor and can stay in the same town on consecutive days. The first campaign day uses the same morning briefing so this sequence is learned from the beginning.
 
-Compare what the towns can supply against what their customers tend to buy. Show each town's specialty, wholesale availability and indicative prices, local demand, and expected retail budget ranges for all six goods. Mark unavailable goods explicitly. Use ranges where vendors quote different prices, with the full vendor-by-vendor comparison in the wholesale book after arrival. Show carried stock and available gold alongside the comparison so the player can consider selling goods already on hand.
+Compare what the towns can supply against what their customers tend to buy. For the previewed town, show its specialty, a wholesale price trend for each good, local demand, expected retail budget ranges, and carried stock. Show available gold alongside the comparison. Each trend shows up to five days of average regular vendor prices before reputation discounts, including today's average. A horizontal dashed line marks the average across all regular quotes for the same good, towns, and days shown. Mark unavailable goods explicitly. The wholesale book gives the full vendor-by-vendor comparison after arrival.
 
 ## Core UI and feedback
 
-- The destination book presents the towns with a consistent set of supply, demand, and budget rows. Make the current selection and confirmation clear.
-- Changing the selection previews the town and its vista. Confirming the selection changes the shop's surroundings to that town for the day.
+- Activating a symbol on the dial highlights that town, previews its vista in the window, and updates the Route Atlas. The atlas can be closed and reopened from the desk while the dial is in use.
+- Activating the center of the dial commits the previewed town for the day and returns the dial to the top of the arch.
 - Expected budgets describe the range for a good. The identities and exact budgets of individual customers stay undisclosed.
 
 ## Exit and edge cases

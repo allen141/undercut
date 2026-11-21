@@ -6,12 +6,14 @@ Undercut is a traveling shop game. Each day, choose a market, decide where to sp
 
 | Phase | Player decisions | Ends when |
 | --- | --- | --- |
-| [Destination](01-destination.md) | Compare towns and commit to today's destination. | The shop arrives and the wholesale book becomes available. |
+| [Destination](01-destination.md) | Read the morning newspaper, compare towns, and commit to today's destination. | The shop arrives and the wholesale book becomes available. |
 | [Buying](02-wholesale.md) | Compare the local vendors, visit up to two, then choose displays and prices. | The player selects **Open Shop**. |
 | [Business](03-business.md) | Watch eight customers and respond to any price offers. | The eighth customer is resolved and the shop closes. |
-| [Closing](04-closing.md) | Review profit and the decisions behind it, then choose when to start another day. | **Next Day** returns the player to destination selection. |
+| [Closing](04-closing.md) | Review profit and the decisions behind it in the nighttime shop, then choose when to start another day. | **Next Day** opens the next morning's newspaper. |
 
 The [shop room and books specification](shop-room-and-books.md) applies across all four phases.
+
+The [world news and market outlook specification](world-news.md) describes the deterministic newspaper data model and the extension points for authored world events.
 
 ## Campaign baseline
 

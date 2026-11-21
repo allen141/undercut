@@ -5,7 +5,7 @@ import { expect, test as base, type Page } from '@playwright/test';
 import { Pool } from 'pg';
 import type { CommandRequest } from '@undercut/contracts';
 import { WINDOW_SLOT_INDEX, applyCommand, newGame, quantity, type State } from '@undercut/game-core';
-import { roomLayout, shopScale } from '../apps/web/src/ShopLayout.js';
+import { roomLayout, shopScale, type Bounds } from '../apps/web/src/ShopLayout.js';
 
 const run = promisify(execFile);
 const password = 'browser-test-credential-41';
@@ -101,28 +101,37 @@ async function expectStock(page: Page, good: string, amount: number) {
 }
 
 async function chooseTown(page: Page, name: string, keyboard = false) {
+  const preview = 'Preview ' + name;
+  const confirm = 'Choose ' + name;
+  if (await action(page, 'Choose today’s town').count()) await activate(page, 'Choose today’s town');
   if (keyboard) {
-    const dial = action(page, 'Turn the door dial');
-    await dial.focus();
-    await expect(dial).toBeFocused();
+    await action(page, preview).focus();
+    await page.keyboard.press('Enter');
+    await expect(action(page, preview)).toHaveAttribute('aria-pressed', 'true');
+    await action(page, confirm).focus();
     await page.keyboard.press('Enter');
   } else {
-    await activate(page, 'Turn the door dial');
+    await activate(page, preview);
+    await activate(page, confirm);
   }
-  await activate(page, 'Preview ' + name);
-  await activate(page, 'Choose ' + name);
 }
 
-async function checkTownJournal(page: Page, name: string, issue: string, picture: string, day: number) {
+async function roomViewport(page: Page) {
   const canvas = (await shopCanvas(page).boundingBox())!;
   const scale = shopScale(canvas.width, canvas.height);
   const layout = roomLayout(canvas.width / scale, canvas.height / scale);
-  const clip = {
-    x: canvas.x + (layout.bay.x + layout.bay.w * .24) * scale,
-    y: canvas.y + (layout.bay.y + layout.bay.h * .18) * scale,
-    width: layout.bay.w * .52 * scale,
-    height: layout.bay.h * .65 * scale,
-  };
+  const clip = (bounds: Bounds, x: number, y: number, w: number, h: number) => ({
+    x: canvas.x + (bounds.x + bounds.w * x) * scale,
+    y: canvas.y + (bounds.y + bounds.h * y) * scale,
+    width: bounds.w * w * scale,
+    height: bounds.h * h * scale,
+  });
+  return { layout, clip, width: canvas.width / scale, height: canvas.height / scale };
+}
+
+async function checkTownJournal(page: Page, name: string, issue: string, picture: string, day: number) {
+  const room = await roomViewport(page);
+  const clip = room.clip(room.layout.window, .14, .12, .72, .68);
   const windowBefore = await page.screenshot({ clip });
   await activate(page, `Open ${name} Journal`);
   const journal = page.getByRole('region', { name: `${name} Journal` });
@@ -212,8 +221,17 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
   const closing = action(page, 'Day’s takings');
   const accept = action(page, 'Accept offer');
   let timeline = reloadAtOffer ? await watchVisitorOutcomes(page) : undefined;
+  const checkDoor = test.info().project.name.endsWith('-chromium');
+  const room = await roomViewport(page);
+  const clip = room.clip(room.layout.door, .42, .72, .17, .18);
+  const closedDoor = checkDoor ? await page.screenshot({ clip }) : undefined;
   await activate(page, 'Open the shop');
   await expect(action(page, 'Serve customer')).toHaveCount(0);
+  if (closedDoor) {
+    await expect(action(page, 'Open business book')).toBeEnabled();
+    await expect.poll(async () => (await page.screenshot({ clip })).equals(closedDoor)).toBe(false);
+    await page.screenshot({ path: test.info().outputPath('business-open-door.png') });
+  }
   if (reloadAtOffer) {
     await expect(page.locator('[data-canvas-status]')).toContainText(/^Customer 2 of 8\. Looking for/);
     await activate(page, 'Hurry this visitor');
@@ -272,6 +290,7 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
   await expect(page.locator('[data-canvas-ledger] li')).toHaveCount(8);
   await expect(report).toContainText(`${state.history.at(-1)?.profit}g`);
   expect(state.history.at(-1)?.profit).toBe(state.revenue - state.costOfSales);
+  if (closedDoor) await expect.poll(async () => (await page.screenshot({ clip })).equals(closedDoor)).toBe(true);
   await activate(page, 'Day’s takings');
   return revision;
 }
@@ -304,15 +323,65 @@ async function screenshot(page: Page, path: string) {
   await page.screenshot({ path, animations: 'disabled' });
 }
 
-test('opens the shop and saves a town choice on Android', { tag: '@smoke' }, async ({ page, account }, info) => {
-  test.skip(info.project.name !== 'mobile-chromium', 'The smoke journey uses Android Chromium.');
+test('previews towns on the dial and confirms the destination', { tag: '@smoke' }, async ({ page, account }, info) => {
+  test.skip(!['mobile-chromium', 'desktop-chromium'].includes(info.project.name), 'The focused dial journey uses Chromium.');
   test.setTimeout(30_000);
   await invite(page, account);
   await createCampaign(page, 'Preview Smoke Shop');
+  const commands: CommandRequest['command'][] = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && request.url().endsWith('/commands')) {
+      commands.push((request.postDataJSON() as CommandRequest).command);
+    }
+  });
   await expect(shopCanvas(page)).toHaveAttribute('data-renderer', 'webgl');
   await expectNoOverflow(page);
-  await chooseTown(page, 'Harbor');
+  const paper = page.getByRole('region', { name: 'The Wandering Gazette' });
+  await expect(paper).toContainText('Morning edition · Day 1');
+  await expect(paper).toContainText('Market outlook');
+  await activate(page, 'Choose today’s town');
+  await expect(action(page, 'Preview Meadow')).toHaveAttribute('aria-pressed', 'true');
+  const atlas = page.getByRole('region', { name: 'Route Atlas' });
+  await expect(atlas).toContainText('Meadow · Grain & herbs');
+  await activate(page, 'Close panel');
+  await expect(atlas).toHaveCount(0);
+  await screenshot(page, info.outputPath('room-and-wall.png'));
+  await activate(page, 'Open route atlas');
+  await expect(atlas.getByText(/Global average \d/)).toHaveCount(6);
+  await expect(atlas).toContainText('Crystal. Day 1, unavailable.');
+  const room = await roomViewport(page);
+  const doorCenter = room.clip(room.layout.door, .5, 0, 0, 0).x;
+  const confirm = (await action(page, 'Choose Meadow').boundingBox())!;
+  expect(confirm.x + confirm.width / 2).toBeCloseTo(doorCenter, 0);
+  const { bookBelowWall, window, door, horizon, page: reading, travelDial, shelves } = room.layout;
+  expect(window.w / room.width).toBeGreaterThan(bookBelowWall ? .60 : .50);
+  expect(door.w / room.width).toBeGreaterThan(.145);
+  expect(window.y).toBeLessThan(74);
+  expect(window.y + window.h).toBeCloseTo(horizon);
+  expect(door.x + door.w).toBeLessThan(window.x);
+  expect(travelDial.x + travelDial.w).toBeLessThan(window.x);
+  if (bookBelowWall) {
+    expect(window.y + window.h).toBeLessThan(reading.y);
+  } else {
+    expect(reading.x + reading.w).toBeLessThan(travelDial.x);
+    expect(reading.x + reading.w).toBeLessThan(door.x);
+  }
+  const sill = shelves[WINDOW_SLOT_INDEX];
+  expect(sill.w).toBeLessThan(window.w * .65);
+  expect(sill.y).toBeGreaterThan(window.y + window.h * .78);
+  const clip = room.clip(room.layout.window, .18, .32, .64, .46);
+  const meadowVista = await page.screenshot({ clip });
+  await activate(page, 'Preview Forge');
+  await expect(atlas).toContainText('Forge · Iron & crystal');
+  await expect(action(page, 'Preview Forge')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(async () => (await page.screenshot({ clip })).equals(meadowVista)).toBe(false);
+  await screenshot(page, info.outputPath('route-atlas-and-wall.png'));
+  await expectRevision(page, 0);
+  expect(commands).toEqual([]);
+  await chooseTown(page, 'Harbor', info.project.name === 'desktop-chromium');
   await expectRevision(page, 1);
+  expect(commands).toEqual([{ type: 'chooseTown', townId: 'harbor' }]);
+  await expect(action(page, 'Preview Harbor')).toHaveCount(0);
   await expect(action(page, 'Open wholesale book')).toBeEnabled();
   const { state } = await campaignSnapshot(page);
   expect(state.townId).toBe('harbor');
@@ -326,6 +395,8 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await invite(page, account);
   await createCampaign(page, 'Saffron Counter');
   await seedGrainNegotiation(page, 'Saffron Counter');
+  await activate(page, 'Choose today’s town');
+  await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Meadow · Grain & herbs');
   await screenshot(page, info.outputPath('01-travel.png'));
   await chooseTown(page, 'Meadow');
   await expectRevision(page, 1);
@@ -348,8 +419,11 @@ test('trades a full day and returns with its ledger and remaining stock', async 
   await activate(page, 'Day’s takings');
   await activate(page, 'Begin day 2');
   await expectRevision(page, closingRevision + 1);
+  await expect(page.getByRole('region', { name: 'The Wandering Gazette' })).toContainText('Morning edition · Day 2');
+  await activate(page, 'Choose today’s town');
+  await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 2');
   if (info.project.name === 'mobile-chromium') {
-    const dial = action(page, 'Turn the door dial');
+    const dial = action(page, 'Preview Meadow');
     const portraitDial = await dial.boundingBox();
     await page.setViewportSize({ width: 740, height: 390 });
     await expect.poll(() => shopCanvas(page).boundingBox()).toMatchObject({ width: 740, height: 390 });
@@ -477,6 +551,9 @@ test('docks the Accounts Book across a phone running in desktop viewport mode', 
   await page.screenshot({ path: info.outputPath('accounts-book-desktop-mode.png') });
   await activate(page, 'Begin day 10');
   await expectRevision(page, 1);
+  await expect(page.getByRole('region', { name: 'The Wandering Gazette' })).toContainText('Morning edition · Day 10');
+  await activate(page, 'Choose today’s town');
+  await expect(page.getByRole('region', { name: 'Route Atlas' })).toContainText('Day 10');
 });
 
 test('keeps two campaigns independent across two days, reconnects, and accepts a reset link', async ({ browser, context, page, account, baseURL }, info) => {
