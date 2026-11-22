@@ -376,7 +376,7 @@ function MarketHistory({ events }: { events: JournalEvent[] }) {
   </>;
 }
 
-export function Ledger({ campaign, page, setPage, close, send, busy, online }: {
+export function Ledger({ campaign, page, setPage, close, send, busy, online, pending }: {
   campaign: Campaign; page: LedgerPageId; setPage: (page: LedgerPageId) => void; close: () => void;
   send: (command?: Command) => void; busy: boolean; online: boolean; pending: boolean;
 }) {
