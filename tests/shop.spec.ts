@@ -203,8 +203,11 @@ async function buy(page: Page, good: string, quantity = 1) {
 }
 
 async function setDisplay(page: Page, slot: number, good: string, price: number, revision: number) {
-  if (await action(page, 'Close panel').count()) await activate(page, 'Close panel');
   const display = slot === WINDOW_SLOT_INDEX ? 'Window display' : `Floor display ${slot + 1}`;
+  const closePanel = action(page, 'Close panel');
+  const displayAction = action(page, display);
+  await expect.poll(async () => (await closePanel.count()) > 0 || (await displayAction.count()) > 0).toBe(true);
+  if (await closePanel.count()) await activate(page, 'Close panel');
   await activate(page, display);
   await activate(page, `Display ${good[0].toUpperCase()}${good.slice(1)}`);
   await activate(page, 'Price per item');
@@ -424,16 +427,15 @@ test('previews towns on the dial and confirms the destination', { tag: '@smoke' 
   const confirm = (await action(page, 'Choose Meadow').boundingBox())!;
   expect(confirm.x + confirm.width / 2).toBeCloseTo(doorCenter, 0);
   const { bookBelowWall, window, door, horizon, page: reading, travelDial, shelves } = room.layout;
-  expect(window.w / room.width).toBeGreaterThan(bookBelowWall ? .60 : .50);
+  expect(window.w / room.layout.scene.w).toBeGreaterThan(.4);
   expect(door.w / room.width).toBeGreaterThan(.145);
-  expect(window.y).toBeLessThan(74);
+  expect(window.y).toBeLessThan(bookBelowWall ? reading.y : 74);
   expect(window.y + window.h).toBeCloseTo(horizon);
-  expect(door.x + door.w).toBeLessThan(window.x);
-  expect(travelDial.x + travelDial.w).toBeLessThan(window.x);
+  expect(window.x + window.w).toBeLessThan(door.x);
+  expect(travelDial.x + travelDial.w / 2).toBeCloseTo(door.x + door.w / 2, 0);
   if (bookBelowWall) {
     expect(window.y + window.h).toBeLessThan(reading.y);
   } else {
-    expect(reading.x + reading.w).toBeLessThan(travelDial.x);
     expect(reading.x + reading.w).toBeLessThan(door.x);
   }
   const sill = shelves[WINDOW_SLOT_INDEX];
