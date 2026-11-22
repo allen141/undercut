@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const softwareWebGL = { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] };
-const firefoxSoftwareWebGL = { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false, 'webgl.disable-fail-if-major-performance-caveat': true } };
+const firefoxSoftwareWebGL = { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false, 'webgl.disable-fail-if-major-performance-caveat': true, 'webgl.force_osmesa': true } };
 
 export default defineConfig({
   testDir: './tests',
