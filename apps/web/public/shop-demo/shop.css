@@ -1,0 +1,63 @@
+html { background: #1b1d2c; color-scheme: dark; }
+body { margin: 0; }
+#undercut-room button { cursor: pointer; }
+#undercut-room{color:#fff0d4;font:500 15px/1.35 system-ui,sans-serif;--town:#7ba699;--gold:#f4c476}
+#undercut-room *{box-sizing:border-box}
+#undercut-room [hidden]{display:none!important}
+#undercut-room button{font:inherit;color:inherit;border:0}
+#undercut-room button:focus-visible{outline:3px solid #fff1ae;outline-offset:4px}
+#undercut-room .ur-stage{position:relative;isolation:isolate;overflow:hidden;min-height:530px;background:radial-gradient(ellipse at 40% 38%,#514952 0%,#2d2a3c 62%,#1b1d2c 100%)}
+#undercut-room .ur-beam{position:absolute;inset:13% 0 auto;height:13px;background:#39242c;box-shadow:0 4px 0 #776057,0 14px 23px #14131a80}
+#undercut-room .ur-floor{position:absolute;inset:59% 0 0;background:repeating-linear-gradient(0deg,#1c1724 0 2px,transparent 2px 43px),repeating-conic-gradient(from 52deg at 47% -40%,#322130 0deg 11deg,#49313a 11deg 22deg);border-top:10px solid #241c27}
+#undercut-room .ur-hud{position:absolute;z-index:2;inset:14px 16px auto;display:flex;justify-content:space-between;align-items:center;gap:7px;pointer-events:none}
+#undercut-room .ur-hud span{padding:7px 13px;background:#221c2c;border:1px solid #8b6e5a;border-radius:4px;white-space:nowrap}
+#undercut-room [data-gold]{color:var(--gold)}
+#undercut-room .ur-halo{position:absolute;inset:7% 10% 32% 49%;background:radial-gradient(ellipse,#e398554f,transparent 65%);pointer-events:none}
+#undercut-room .ur-lamp{position:absolute;top:14%;left:71%;width:36px;height:28px;background:#ffd185;box-shadow:0 0 29px #ffc16ba8;border:5px solid #533333;border-radius:65% 65% 20% 20%}
+#undercut-room .ur-lamp:before{content:"";position:absolute;background:#533333;width:4px;height:22px;bottom:100%;left:11px}
+#undercut-room .ur-door{position:absolute;inset:25% auto 26% 10%;width:26%;max-width:220px;padding:0;border:8px solid #7b504b;border-radius:48% 48% 7% 7% / 28% 28% 7% 7%;background:radial-gradient(ellipse at 50% 38%,color-mix(in srgb,var(--town),transparent 20%),#271f33 75%);box-shadow:inset 0 0 0 4px #382431,0 0 0 4px #2c1d2c,0 14px 22px #17121fa0;text-align:center}
+#undercut-room .ur-door:hover{border-color:#bf875d}
+#undercut-room .ur-dial{position:absolute;top:9%;left:50%;translate:-50%;display:grid;place-items:center;width:55px;height:55px;border:4px double var(--gold);border-radius:50%;background:#3b2b37;color:var(--gold);font-size:35px}
+#undercut-room .ur-knob{position:absolute;top:56%;right:13%;width:12px;height:12px;border-radius:50%;background:var(--gold);box-shadow:0 0 14px #f4c47655}
+#undercut-room .ur-tag{position:absolute;bottom:12%;left:50%;translate:-50%;width:max-content;max-width:95%;padding:4px 8px;background:#272030;border:1px solid #977455;border-radius:3px}
+#undercut-room .ur-shelves{position:absolute;inset:26% 9% auto 50%;display:flex;flex-direction:column;gap:10px}
+#undercut-room .ur-shelf{height:62px;position:relative;display:flex;align-items:end;justify-content:space-between;padding:0 12px 7px;background:#322638;border-bottom:7px solid #936052;box-shadow:inset 0 0 0 3px #4f3a46,0 5px 4px #2118228c;text-align:left}
+#undercut-room .ur-shelf:hover{border-bottom-color:var(--gold)}
+#undercut-room .ur-goods{display:flex;gap:5px;align-items:end}
+#undercut-room .ur-goods i{width:20px;height:26px;display:block;background:var(--good,#ce9e60);border:3px solid #fff3;border-radius:7px 7px 4px 4px;box-shadow:0 3px 2px #15111c8c}
+#undercut-room .ur-counter{position:absolute;left:5%;right:5%;bottom:35px;height:80px;display:flex;align-items:start;justify-content:space-around;gap:6px;padding:9px 7px;background:repeating-linear-gradient(0deg,#4d2e37 0 2px,#633c42 2px 25px);border-top:10px solid #a26951;border-radius:7px 7px 15px 15px;box-shadow:0 14px 25px #15121cc0}
+#undercut-room .ur-counter button{min-height:40px;padding:6px 12px;border:1px solid #b18a5f;background:#3b2937;border-radius:4px}
+#undercut-room .ur-counter .ur-bell,#undercut-room .ur-panel .ur-primary{background:#e5b971;color:#2b1d24;border-color:#e5b971;font-weight:700}
+#undercut-room .ur-counter button:hover,#undercut-room .ur-panel button:hover{filter:brightness(1.2)}
+#undercut-room .ur-visitor{position:absolute;left:47%;bottom:106px;width:58px;height:61px;border-radius:38% 38% 10% 10%;background:#74867f;box-shadow:0 0 0 4px #302638}
+#undercut-room .ur-visitor i{position:absolute;left:11px;bottom:45px;width:36px;height:42px;border-radius:48%;background:#d5aa80;border-top:13px solid #363140}
+#undercut-room .ur-tip{position:absolute;bottom:8px;left:8px;right:8px;text-align:center;color:#ffebc8;font-size:13px}
+#undercut-room .ur-panel{z-index:4;position:absolute;top:16%;left:50%;translate:-50%;width:min(90%,400px);max-height:76%;overflow:auto;padding:17px;background:#2a202d;border:2px solid #af815d;border-radius:7px;box-shadow:0 0 0 100vmax #1e18227a,0 12px 32px #140f1966}
+#undercut-room .ur-panel h3{font:500 25px/1.1 Georgia,serif;color:#ffe1a8;margin:0 38px 12px 0}
+#undercut-room .ur-panel p{margin:0 0 12px}
+#undercut-room .ur-panel button{min-height:40px;border:1px solid #8a6661;background:#45323f;border-radius:4px;padding:7px 10px}
+#undercut-room .ur-panel .ur-close{position:absolute;right:10px;top:9px;min-width:40px}
+#undercut-room .ur-options{display:grid;gap:7px}
+#undercut-room .ur-options button{text-align:left}
+#undercut-room .ur-options small{display:block;margin-top:2px;color:#ead0b2}
+#undercut-room .ur-figures{display:grid;grid-template-columns:1fr auto;gap:6px 18px;margin-bottom:12px}
+@media(max-width:520px){
+ #undercut-room .ur-stage{min-height:555px}
+ #undercut-room .ur-hud{inset:12px 7px auto;gap:4px;font-size:13px}
+ #undercut-room .ur-hud span{padding:6px 7px}
+ #undercut-room .ur-door{left:8%;top:23%;width:33%;bottom:36%;border-width:6px}
+ #undercut-room .ur-dial{width:44px;height:44px;font-size:28px}
+ #undercut-room .ur-tag{font-size:12px;padding:3px}
+ #undercut-room .ur-shelves{left:48%;right:5%;top:27%;gap:8px}
+ #undercut-room .ur-shelf{height:53px;padding:0 5px 4px;font-size:12px}
+ #undercut-room .ur-goods i{width:12px;height:19px}
+ #undercut-room .ur-counter{left:3%;right:3%;min-height:76px;bottom:51px}
+ #undercut-room .ur-counter button{font-size:13px;padding:6px}
+ #undercut-room .ur-tip{bottom:9px;min-height:34px}
+ #undercut-room .ur-visitor{bottom:124px}
+}
+
+#undercut-room .ur-stage { min-height: max(530px, 100vh); min-height: max(530px, 100dvh); }
+@media (max-width: 520px) {
+  #undercut-room .ur-stage { min-height: max(555px, 100vh); min-height: max(555px, 100dvh); }
+}
