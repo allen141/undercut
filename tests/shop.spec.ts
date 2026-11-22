@@ -203,8 +203,11 @@ async function buy(page: Page, good: string, quantity = 1) {
 }
 
 async function setDisplay(page: Page, slot: number, good: string, price: number, revision: number) {
-  if (await action(page, 'Close panel').count()) await activate(page, 'Close panel');
   const display = slot === WINDOW_SLOT_INDEX ? 'Window display' : `Floor display ${slot + 1}`;
+  const closePanel = action(page, 'Close panel');
+  const displayAction = action(page, display);
+  await expect.poll(async () => (await closePanel.count()) > 0 || (await displayAction.count()) > 0).toBe(true);
+  if (await closePanel.count()) await activate(page, 'Close panel');
   await activate(page, display);
   await activate(page, `Display ${good[0].toUpperCase()}${good.slice(1)}`);
   await activate(page, 'Price per item');
