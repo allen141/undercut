@@ -1,1 +1,1 @@
-{"name":"@undercut/web","private":true,"type":"module"}
+{"name":"@undercut/web","private":true,"type":"module","dependencies":{"three":"0.187.0"},"devDependencies":{"@types/three":"0.187.0"}}
