@@ -3,10 +3,6 @@ import type { Bounds } from './ShopLayout.js';
 import harborSceneData from './demo-assets/harbor/scene/harbor_shop.scene.json';
 import travelerIdleSheet from './demo-assets/traveler/idle_read_map_sheet.png';
 import travelerWalkSheet from './demo-assets/traveler/walk_sheet.png';
-import harborWindowExterior from './demo-assets/window-exteriors/harbor-panorama.png';
-import meadowWindowExterior from './demo-assets/window-exteriors/meadows-panorama.png';
-import foundryWindowExterior from './demo-assets/window-exteriors/foundry-panorama.png';
-import windowFrame from './demo-assets/window-exteriors/window-frame-overlay.png';
 
 const harborArtUrls = import.meta.glob('./demo-assets/harbor/art/**/*.png', {
   eager: true,
@@ -16,6 +12,7 @@ const harborArtUrls = import.meta.glob('./demo-assets/harbor/art/**/*.png', {
 
 type HarborManifest = {
   background: string;
+  town_backgrounds: { harbor: string; meadow: string; forge: string };
   assets: Record<string, { file: string }>;
   objects: Array<{
     asset?: string;
@@ -39,9 +36,8 @@ type AssetName = typeof names[number];
 export type CustomerMotion = 'idle' | 'walk';
 export type ShopTextures = Record<AssetName, Texture> & {
   harbor: Record<string, Texture>;
+  townBackgrounds: { harbor: Texture; meadow: Texture; forge: Texture };
   visitor: Record<CustomerMotion, Texture[]>;
-  windowFrame: Texture;
-  windowExteriors: { harbor: Texture; meadow: Texture; forge: Texture };
 };
 
 function splitSheet(sheet: Texture): Texture[] {
@@ -62,6 +58,7 @@ export async function loadShopTextures(): Promise<ShopTextures> {
   ]));
   const harborPaths = Array.from(new Set([
     harborManifest.background,
+    ...Object.values(harborManifest.town_backgrounds),
     ...harborManifest.objects.flatMap(object => [
       ...(object.asset ? [harborManifest.assets[object.asset]?.file] : []),
       ...(object.composite?.desk_asset ? [harborManifest.assets[object.composite.desk_asset]?.file] : []),
@@ -76,21 +73,19 @@ export async function loadShopTextures(): Promise<ShopTextures> {
   const visitorUrls = [travelerIdleSheet, travelerWalkSheet];
   const loaded = await Assets.load<Texture>([
     ...urls, ...harborUrls, ...visitorUrls,
-    harborWindowExterior, meadowWindowExterior, foundryWindowExterior, windowFrame,
   ]);
   const harbor = Object.fromEntries(harborPaths.map((path, index) => [path, loaded[harborUrls[index]]]));
   return {
     ...Object.fromEntries(names.map((name, index) => [name, loaded[urls[index]]])),
     harbor,
+    townBackgrounds: {
+      harbor: harbor[harborManifest.town_backgrounds.harbor],
+      meadow: harbor[harborManifest.town_backgrounds.meadow],
+      forge: harbor[harborManifest.town_backgrounds.forge],
+    },
     visitor: {
       idle: splitSheet(loaded[travelerIdleSheet]),
       walk: splitSheet(loaded[travelerWalkSheet]),
-    },
-    windowFrame: loaded[windowFrame],
-    windowExteriors: {
-      harbor: loaded[harborWindowExterior],
-      meadow: loaded[meadowWindowExterior],
-      forge: loaded[foundryWindowExterior],
     },
   } as ShopTextures;
 }

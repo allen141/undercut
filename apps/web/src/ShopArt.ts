@@ -2,7 +2,7 @@ import { Container, Graphics, Sprite } from 'pixi.js';
 import { TOWNS, quantity, type GoodId, type State } from '@undercut/game-core';
 import { fitSprite, placeSprite, type CustomerMotion, type ShopTextures } from './ShopAssets.js';
 import harborSceneData from './demo-assets/harbor/scene/harbor_shop.scene.json';
-import { roomLayout, SHOP_WINDOW_EXTERIOR, SHOP_WINDOW_FRAME, type Bounds } from './ShopLayout.js';
+import { roomLayout, type Bounds } from './ShopLayout.js';
 
 type ArtOptions = { townId?: string; selectedShelf?: number; stock?: (goodId: GoodId) => number };
 type HarborObject = {
@@ -92,13 +92,11 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
     h: rect[3] * layout.scene.h / harborScene.authored_size[1],
   });
   const background = new Graphics().rect(0, 0, width, height).fill(0x1c292d);
-  layer.addChild(background, placeSprite(art.harbor[harborScene.background], layout.scene));
   const townId = options.townId ?? state.townId;
-  const exterior = townId === 'meadow'
-    ? art.windowExteriors.meadow
-    : townId === 'forge' ? art.windowExteriors.forge : art.windowExteriors.harbor;
-  layer.addChild(placeSprite(exterior, toScreen(SHOP_WINDOW_EXTERIOR)));
-  layer.addChild(placeSprite(art.windowFrame, toScreen(SHOP_WINDOW_FRAME)));
+  const roomBackground = townId === 'meadow'
+    ? art.townBackgrounds.meadow
+    : townId === 'forge' ? art.townBackgrounds.forge : art.townBackgrounds.harbor;
+  layer.addChild(background, placeSprite(roomBackground, layout.scene));
 
   const leftWall = harborScene.objects.find(object => object.id === 'left_wall_display');
   const leftWallPath = leftWall?.asset ? harborScene.assets[leftWall.asset]?.file : undefined;

@@ -18,6 +18,11 @@
     "note": "Perspective is baked into the 2D art. Do not rotate billboard planes or introduce fisheye."
   },
   "background": "art/backgrounds/harbor_empty_1448x1086.png",
+  "town_backgrounds": {
+    "harbor": "art/backgrounds/harbor_empty_1448x1086.png",
+    "meadow": "art/backgrounds/harbor_meadows_1448x1086.png",
+    "forge": "art/backgrounds/harbor_foundry_1448x1086.png"
+  },
   "objects": [
     {
       "id": "red_rug",

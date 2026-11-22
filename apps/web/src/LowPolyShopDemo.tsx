@@ -5,12 +5,7 @@ import idleReadMapSheet from './demo-assets/traveler/idle_read_map_sheet.png';
 import walkReadMapSheet from './demo-assets/traveler/walk_read_map_sheet.png';
 import walkSheet from './demo-assets/traveler/walk_sheet.png';
 import harborSceneData from './demo-assets/harbor/scene/harbor_shop.scene.json';
-import harborWindowExteriorUrl from './demo-assets/window-exteriors/harbor-panorama.png';
-import meadowWindowExteriorUrl from './demo-assets/window-exteriors/meadows-panorama.png';
-import foundryWindowExteriorUrl from './demo-assets/window-exteriors/foundry-panorama.png';
-import windowFrameUrl from './demo-assets/window-exteriors/window-frame-overlay.png';
 import './low-poly-shop.css';
-import { SHOP_WINDOW_EXTERIOR, SHOP_WINDOW_FRAME } from './ShopLayout.js';
 
 type HarborObject = {
   id: string;
@@ -35,6 +30,7 @@ type HarborObject = {
 type HarborManifest = {
   authored_size: [number, number];
   background: string;
+  town_backgrounds: { harbor: string; meadow: string; forge: string };
   assets: Record<string, { file: string }>;
   objects: HarborObject[];
   /** Fixed-view attachment points in the artwork's 1448×1086 coordinate space. */
@@ -142,32 +138,6 @@ async function createShopScene(): Promise<SceneRig> {
     textures.set(url, texture);
     return texture;
   });
-  const windowExteriorUrls = {
-    harbor: harborWindowExteriorUrl,
-    meadows: meadowWindowExteriorUrl,
-    foundry: foundryWindowExteriorUrl,
-  };
-  const windowExteriorPromises = Object.entries(windowExteriorUrls).map(async ([view, url]) => {
-    const texture = await loader.loadAsync(url);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.magFilter = THREE.LinearFilter;
-    texture.minFilter = THREE.LinearFilter;
-    texture.generateMipmaps = false;
-    textures.set(url, texture);
-    return [view, texture] as const;
-  });
-  const windowFramePromise = loader.loadAsync(windowFrameUrl).then(texture => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.magFilter = THREE.LinearFilter;
-    texture.minFilter = THREE.LinearFilter;
-    texture.generateMipmaps = false;
-    textures.set(windowFrameUrl, texture);
-    return texture;
-  });
   const goodTexturePromises = GOODS.map(async good => {
     const url = `${import.meta.env.BASE_URL}shop-art/good-${good.id}.webp`;
     const texture = await loader.loadAsync(url);
@@ -180,18 +150,16 @@ async function createShopScene(): Promise<SceneRig> {
   });
   const kitPaths = new Set<string>([
     manifest.background,
+    ...Object.values(manifest.town_backgrounds),
     ...Object.values(manifest.assets).map(asset => asset.file),
     ...shopkeeperPaths,
   ]);
-  const [kitTextures, travelerTextures, windowExteriorEntries, windowFrameTexture, goodTextureEntries] = await Promise.all([
+  const [kitTextures, travelerTextures, goodTextureEntries] = await Promise.all([
     Promise.all([...kitPaths].map(async path => [path, await loadTexture(path)] as const)),
     Promise.all(travelerPromises),
-    Promise.all(windowExteriorPromises),
-    windowFramePromise,
     Promise.all(goodTexturePromises),
   ]);
   const textureMap = new Map<string, THREE.Texture>(kitTextures);
-  const windowExteriorTextures = new Map<string, THREE.Texture>(windowExteriorEntries);
   const goodTextures = new Map<GoodId, THREE.Texture>(goodTextureEntries);
   const travelerClips: Record<TravelerAnimation, TravelerClip> = {
     idle_read_map: { texture: travelerTextures[0], fps: 1000 / 240 },
@@ -247,15 +215,14 @@ async function createShopScene(): Promise<SceneRig> {
     return mesh;
   };
 
-  plane('background', textureMap.get(manifest.background)!, [0, 0, width, height], 0);
-  const harborWindow = plane('harbor_window_exterior', windowExteriorTextures.get('harbor')!, SHOP_WINDOW_EXTERIOR, 1);
-  const meadowWindow = plane('meadows_window_exterior', windowExteriorTextures.get('meadows')!, SHOP_WINDOW_EXTERIOR, 1);
-  const foundryWindow = plane('foundry_window_exterior', windowExteriorTextures.get('foundry')!, SHOP_WINDOW_EXTERIOR, 1);
-  plane('back_window_frame', windowFrameTexture, SHOP_WINDOW_FRAME, 2);
+  const background = plane('background', textureMap.get(manifest.background)!, [0, 0, width, height], 0);
+  const backgroundMaterial = background.material as THREE.MeshBasicMaterial;
   const setWindowView = (view: WindowView) => {
-    harborWindow.visible = view === 'harbor';
-    meadowWindow.visible = view === 'meadows';
-    foundryWindow.visible = view === 'foundry';
+    const backgroundKey = view === 'meadows' ? manifest.town_backgrounds.meadow
+      : view === 'foundry' ? manifest.town_backgrounds.forge
+        : manifest.town_backgrounds.harbor;
+    backgroundMaterial.map = textureMap.get(backgroundKey)!;
+    backgroundMaterial.needsUpdate = true;
   };
   setWindowView('harbor');
   const orderedObjects = [...manifest.objects].sort((a, b) => a.z_order - b.z_order);

@@ -1,9 +1,5 @@
 export type Bounds = { x: number; y: number; w: number; h: number };
 
-// Authored in the 1448×1086 harbor-room coordinate space and shared by both renderers.
-export const SHOP_WINDOW_EXTERIOR: [number, number, number, number] = [410, 17, 690, 290];
-export const SHOP_WINDOW_FRAME: [number, number, number, number] = [380, 0, 770, 310];
-
 const dialAspect = 317 / 155;
 
 export function shopScale(width: number, height: number, pageScale = 1) {
