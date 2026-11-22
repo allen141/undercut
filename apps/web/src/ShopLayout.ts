@@ -55,6 +55,7 @@ export function roomLayout(width: number, height: number) {
   const door = sceneDoor;
   const window = sceneWindow;
   const horizon = window.y + window.h;
+  const bay = { x: window.x, y: Math.min(window.y, door.y), w: door.x - window.x, h: Math.max(window.h, door.h) };
   const doorCenter = door.x + door.w / 2;
   const dialAboveDoor = (w: number): Bounds => {
     const h = w / dialAspect;
