@@ -75,9 +75,9 @@ jobs:
           node-version: "24"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - name: Install Chromium for preview smoke
+      - name: Install browsers for platform smoke
         if: github.event_name == 'pull_request'
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
       - name: Install production browsers
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: pnpm exec playwright install --with-deps chromium firefox webkit
