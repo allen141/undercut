@@ -56,29 +56,8 @@ const pages: LedgerPage[] = [
     </div>
     <p className="ledger-total">Total stock value <strong>{money(inventoryValue(state))}</strong></p>
   </> },
-  { id: 'performance', title: 'Performance', render: ({ state }) => {
-    const total = state.history.reduce((sum, day) => ({
-      revenue: sum.revenue + day.revenue, costs: sum.costs + day.costOfSales,
-      profit: sum.profit + day.profit, sold: sum.sold + day.sold,
-    }), { revenue: 0, costs: 0, profit: 0, sold: 0 });
-    return <>
-      <p className="ledger-intro">Completed trading days in this campaign.</p>
-      <div className="ledger-metrics">
-        <div><span>Revenue</span><strong>{money(total.revenue)}</strong></div>
-        <div><span>Cost of goods sold</span><strong>{money(total.costs)}</strong></div>
-        <div><span>Trading profit</span><strong>{money(total.profit)}</strong></div>
-        <div><span>Items sold</span><strong>{total.sold}</strong></div>
-      </div>
-      {!state.history.length ? <p className="ledger-empty">Close your first shop day to begin tracking performance.</p> :
-        <div className="ledger-table" role="table" aria-label="Daily shop performance">
-          <div role="row" className="ledger-table-head"><span role="columnheader">Day / town</span><span role="columnheader">Revenue</span><span role="columnheader">Profit</span></div>
-          {[...state.history].reverse().map(day => <div role="row" key={day.day}>
-            <span role="cell">Day {day.day} · {townName(day.townId)}</span><span role="cell">{money(day.revenue)}</span><span role="cell">{money(day.profit)}</span>
-          </div>)}
-        </div>}
-    </>;
-  } },
-  { id: 'markets', title: 'Locations & prices', render: ({ state }) => <MarketHistory events={state.journal ?? []} /> },
+  { id: 'performance', title: 'Performance', render: context => <PerformancePage {...context} /> },
+  { id: 'markets', title: 'Markets', render: context => <MarketExplorer {...context} /> },
   { id: 'suppliers', title: 'Suppliers', render: ({ state, send, busy, online }) => <>
     <p className="ledger-intro">Compare this town’s current offers before using one of your two vendor visits.</p>
     <p>Visits used: {state.visitedVendorIds.length} of 2</p>
@@ -164,6 +143,78 @@ function MerchandisingPage({ state, send, busy, online }: PageContext) {
       onClick={() => send({ type: 'configureDisplays', displays: goods.map((goodId, slot) => ({ slot, goodId, pricePreset: presets[slot] })) })}>
       Save all displays
     </button>}
+  </>;
+}
+
+function MarketExplorer({ state, send, busy, online }: PageContext) {
+  const [selectedGood, setSelectedGood] = useState(GOODS[0].id);
+  const currentTown = TOWNS.find(town => town.id === state.townId);
+  return <>
+    <p className="ledger-intro">Estimated retail ranges and demand context before travel. Current seller offers appear only after arrival.</p>
+    <label className="ledger-filter">Commodity<select value={selectedGood} onChange={event => setSelectedGood(event.target.value as typeof selectedGood)}>
+      {GOODS.map(good => <option key={good.id} value={good.id}>{good.name}</option>)}
+    </select></label>
+    <div className="market-explorer-grid">{TOWNS.map(town => {
+      const range = priceRange(town, selectedGood);
+      const held = quantity(state, selectedGood);
+      const demand = town.demand[selectedGood];
+      return <article className={`market-town ${currentTown?.id === town.id ? 'selected' : ''}`} key={town.id}>
+        <h3>{town.name}</h3><p>{town.specialty}</p>
+        <dl><dt>Estimated retail</dt><dd>{range.min}–{range.max}g</dd><dt>Demand index</dt><dd>{demand.toFixed(1)}×</dd><dt>Held stock</dt><dd>{held}</dd></dl>
+        {state.phase === 'travel' && <button className="primary" disabled={busy || !online}
+          onClick={() => send({ type: 'chooseTown', townId: town.id })}>Travel to {town.name}</button>}
+      </article>;
+    })}</div>
+    <h3>Commodity comparison</h3>
+    <div className="ledger-table market-matrix" role="table" aria-label="Estimated retail by town and good">
+      <div role="row" className="ledger-table-head"><span role="columnheader">Good</span>{TOWNS.map(town => <span role="columnheader" key={town.id}>{town.name}</span>)}</div>
+      {GOODS.map(good => <div role="row" key={good.id}><span role="cell">{good.name}</span>{TOWNS.map(town => {
+        const range = priceRange(town, good.id);
+        return <span role="cell" key={town.id}>{range.min}–{range.max}g</span>;
+      })}</div>)}
+    </div>
+  </>;
+}
+
+function PerformancePage({ state, send, busy, online }: PageContext) {
+  const [townFilter, setTownFilter] = useState('all');
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const history = state.history.filter(day => townFilter === 'all' || day.townId === townFilter);
+  const total = history.reduce((sum, day) => ({
+    revenue: sum.revenue + day.revenue, costs: sum.costs + day.costOfSales,
+    profit: sum.profit + day.profit, sold: sum.sold + day.sold,
+  }), { revenue: 0, costs: 0, profit: 0, sold: 0 });
+  const max = Math.max(1, ...history.map(day => day.revenue));
+  const selected = history.find(day => day.day === selectedDay);
+  return <>
+    <p className="ledger-intro">Recorded trading results. Cash flow, cost of goods sold, and profit are separate measures.</p>
+    <label className="ledger-filter">Town filter<select value={townFilter} onChange={event => setTownFilter(event.target.value)}>
+      <option value="all">All towns</option>{TOWNS.map(town => <option key={town.id} value={town.id}>{town.name}</option>)}
+    </select></label>
+    <div className="ledger-metrics">
+      <div><span>Revenue</span><strong>{money(total.revenue)}</strong></div><div><span>COGS</span><strong>{money(total.costs)}</strong></div>
+      <div><span>Gross profit</span><strong>{money(total.profit)}</strong></div><div><span>Gross margin</span><strong>{total.revenue ? `${Math.round(total.profit / total.revenue * 100)}%` : '—'}</strong></div>
+      <div><span>Sales conversion</span><strong>{history.length ? `${Math.round(total.sold / (history.length * 8) * 100)}%` : '—'}</strong></div>
+      <div><span>Units sold</span><strong>{total.sold}</strong></div>
+    </div>
+    {!history.length ? <p className="ledger-empty">Close your first shop day to begin tracking performance.</p> : <>
+      <section className="performance-chart" aria-label="Daily revenue and profit chart">
+        <h3>Revenue and profit by day</h3><div className="performance-bars">{history.map(day => <button type="button" key={day.day}
+          className={selectedDay === day.day ? 'selected' : ''} onClick={() => setSelectedDay(day.day)}
+          aria-label={`Day ${day.day}: revenue ${day.revenue} gold, profit ${day.profit} gold`}>
+          <span className="bar-pair"><i style={{ height: `${Math.max(3, day.revenue / max * 100)}%` }} /><b style={{ height: `${Math.max(3, Math.max(0, day.profit) / max * 100)}%` }} /></span>
+          <small>Day {day.day}</small></button>)}</div><p className="chart-legend"><i /> Revenue <b /> Profit</p>
+      </section>
+      {selected && <p className="selected-day">Day {selected.day} · {townName(selected.townId)} · Revenue {money(selected.revenue)} · COGS {money(selected.costOfSales)} · Profit {money(selected.profit)} · Wholesale {money(selected.purchases)}</p>}
+      <div className="ledger-table" role="table" aria-label="Daily shop performance">
+        <div role="row" className="ledger-table-head"><span role="columnheader">Day / town</span><span role="columnheader">Revenue</span><span role="columnheader">Profit</span></div>
+        {[...history].reverse().map(day => <button type="button" role="row" className="performance-row" key={day.day} onClick={() => setSelectedDay(day.day)}>
+          <span role="cell">Day {day.day} · {townName(day.townId)}</span><span role="cell">{money(day.revenue)}</span><span role="cell">{money(day.profit)}</span>
+        </button>)}
+      </div>
+    </>}
+    {state.phase === 'report' && <button className="primary begin-next-day" disabled={busy || !online}
+      onClick={() => send({ type: 'nextDay' })}>Begin next day</button>}
   </>;
 }
 
