@@ -3,8 +3,10 @@ import type { Bounds } from './ShopLayout.js';
 import harborSceneData from './demo-assets/harbor/scene/harbor_shop.scene.json';
 import travelerIdleSheet from './demo-assets/traveler/idle_read_map_sheet.png';
 import travelerWalkSheet from './demo-assets/traveler/walk_sheet.png';
-import meadowWindowExterior from './demo-assets/window-exteriors/meadows.png';
-import foundryWindowExterior from './demo-assets/window-exteriors/foundry.png';
+import harborWindowExterior from './demo-assets/window-exteriors/harbor-panorama.png';
+import meadowWindowExterior from './demo-assets/window-exteriors/meadows-panorama.png';
+import foundryWindowExterior from './demo-assets/window-exteriors/foundry-panorama.png';
+import windowFrame from './demo-assets/window-exteriors/window-frame-overlay.png';
 
 const harborArtUrls = import.meta.glob('./demo-assets/harbor/art/**/*.png', {
   eager: true,
@@ -38,7 +40,8 @@ export type CustomerMotion = 'idle' | 'walk';
 export type ShopTextures = Record<AssetName, Texture> & {
   harbor: Record<string, Texture>;
   visitor: Record<CustomerMotion, Texture[]>;
-  windowExteriors: { meadow: Texture; forge: Texture };
+  windowFrame: Texture;
+  windowExteriors: { harbor: Texture; meadow: Texture; forge: Texture };
 };
 
 function splitSheet(sheet: Texture): Texture[] {
@@ -72,7 +75,8 @@ export async function loadShopTextures(): Promise<ShopTextures> {
   });
   const visitorUrls = [travelerIdleSheet, travelerWalkSheet];
   const loaded = await Assets.load<Texture>([
-    ...urls, ...harborUrls, ...visitorUrls, meadowWindowExterior, foundryWindowExterior,
+    ...urls, ...harborUrls, ...visitorUrls,
+    harborWindowExterior, meadowWindowExterior, foundryWindowExterior, windowFrame,
   ]);
   const harbor = Object.fromEntries(harborPaths.map((path, index) => [path, loaded[harborUrls[index]]]));
   return {
@@ -82,7 +86,9 @@ export async function loadShopTextures(): Promise<ShopTextures> {
       idle: splitSheet(loaded[travelerIdleSheet]),
       walk: splitSheet(loaded[travelerWalkSheet]),
     },
+    windowFrame: loaded[windowFrame],
     windowExteriors: {
+      harbor: loaded[harborWindowExterior],
       meadow: loaded[meadowWindowExterior],
       forge: loaded[foundryWindowExterior],
     },

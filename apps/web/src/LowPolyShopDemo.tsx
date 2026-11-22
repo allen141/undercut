@@ -5,9 +5,12 @@ import idleReadMapSheet from './demo-assets/traveler/idle_read_map_sheet.png';
 import walkReadMapSheet from './demo-assets/traveler/walk_read_map_sheet.png';
 import walkSheet from './demo-assets/traveler/walk_sheet.png';
 import harborSceneData from './demo-assets/harbor/scene/harbor_shop.scene.json';
-import meadowWindowExteriorUrl from './demo-assets/window-exteriors/meadows.png';
-import foundryWindowExteriorUrl from './demo-assets/window-exteriors/foundry.png';
+import harborWindowExteriorUrl from './demo-assets/window-exteriors/harbor-panorama.png';
+import meadowWindowExteriorUrl from './demo-assets/window-exteriors/meadows-panorama.png';
+import foundryWindowExteriorUrl from './demo-assets/window-exteriors/foundry-panorama.png';
+import windowFrameUrl from './demo-assets/window-exteriors/window-frame-overlay.png';
 import './low-poly-shop.css';
+import { SHOP_WINDOW_EXTERIOR, SHOP_WINDOW_FRAME } from './ShopLayout.js';
 
 type HarborObject = {
   id: string;
@@ -139,7 +142,11 @@ async function createShopScene(): Promise<SceneRig> {
     textures.set(url, texture);
     return texture;
   });
-  const windowExteriorUrls = { meadows: meadowWindowExteriorUrl, foundry: foundryWindowExteriorUrl };
+  const windowExteriorUrls = {
+    harbor: harborWindowExteriorUrl,
+    meadows: meadowWindowExteriorUrl,
+    foundry: foundryWindowExteriorUrl,
+  };
   const windowExteriorPromises = Object.entries(windowExteriorUrls).map(async ([view, url]) => {
     const texture = await loader.loadAsync(url);
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -150,6 +157,16 @@ async function createShopScene(): Promise<SceneRig> {
     texture.generateMipmaps = false;
     textures.set(url, texture);
     return [view, texture] as const;
+  });
+  const windowFramePromise = loader.loadAsync(windowFrameUrl).then(texture => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    textures.set(windowFrameUrl, texture);
+    return texture;
   });
   const goodTexturePromises = GOODS.map(async good => {
     const url = `${import.meta.env.BASE_URL}shop-art/good-${good.id}.webp`;
@@ -166,10 +183,11 @@ async function createShopScene(): Promise<SceneRig> {
     ...Object.values(manifest.assets).map(asset => asset.file),
     ...shopkeeperPaths,
   ]);
-  const [kitTextures, travelerTextures, windowExteriorEntries, goodTextureEntries] = await Promise.all([
+  const [kitTextures, travelerTextures, windowExteriorEntries, windowFrameTexture, goodTextureEntries] = await Promise.all([
     Promise.all([...kitPaths].map(async path => [path, await loadTexture(path)] as const)),
     Promise.all(travelerPromises),
     Promise.all(windowExteriorPromises),
+    windowFramePromise,
     Promise.all(goodTexturePromises),
   ]);
   const textureMap = new Map<string, THREE.Texture>(kitTextures);
@@ -230,9 +248,12 @@ async function createShopScene(): Promise<SceneRig> {
   };
 
   plane('background', textureMap.get(manifest.background)!, [0, 0, width, height], 0);
-  const meadowWindow = plane('meadows_window_exterior', windowExteriorTextures.get('meadows')!, [415, 20, 680, 285], 1);
-  const foundryWindow = plane('foundry_window_exterior', windowExteriorTextures.get('foundry')!, [415, 20, 680, 285], 1);
+  const harborWindow = plane('harbor_window_exterior', windowExteriorTextures.get('harbor')!, SHOP_WINDOW_EXTERIOR, 1);
+  const meadowWindow = plane('meadows_window_exterior', windowExteriorTextures.get('meadows')!, SHOP_WINDOW_EXTERIOR, 1);
+  const foundryWindow = plane('foundry_window_exterior', windowExteriorTextures.get('foundry')!, SHOP_WINDOW_EXTERIOR, 1);
+  plane('back_window_frame', windowFrameTexture, SHOP_WINDOW_FRAME, 2);
   const setWindowView = (view: WindowView) => {
+    harborWindow.visible = view === 'harbor';
     meadowWindow.visible = view === 'meadows';
     foundryWindow.visible = view === 'foundry';
   };
