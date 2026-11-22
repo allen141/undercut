@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
-import { quantity, type GoodId, type State } from '@undercut/game-core';
+import { WINDOW_SLOT_INDEX, quantity, type GoodId, type State } from '@undercut/game-core';
 import { fitSprite, placeSprite, type CustomerMotion, type ShopTextures } from './ShopAssets.js';
 import harborSceneData from './demo-assets/harbor/scene/harbor_shop.scene.json';
 import { roomLayout, type Bounds } from './ShopLayout.js';
@@ -63,6 +63,21 @@ export function setCoin(sprite: Sprite, x: number, y: number, radius: number, st
   sprite.visible = true;
 }
 
+function drawWindowDisplay(layer: Container, art: ShopTextures, layout: ReturnType<typeof roomLayout>, state: State,
+  options: ArtOptions) {
+  const shelf = state.shelves[WINDOW_SLOT_INDEX];
+  if (!shelf?.goodId) return;
+  const bounds = layout.sceneShelves[WINDOW_SLOT_INDEX];
+  const stock = Math.min(5, options.stock?.(shelf.goodId) ?? quantity(state, shelf.goodId));
+  const size = Math.min(bounds.h * .51, bounds.w * .17, 58);
+  const platformY = bounds.y + bounds.h * .80;
+  for (let item = 0; item < stock; item++) {
+    const sprite = new Sprite();
+    setGood(sprite, art, shelf.goodId, bounds.x + bounds.w * (.18 + .16 * item), platformY, size);
+    layer.addChild(sprite);
+  }
+}
+
 
 export function drawRoom(layer: Container, foreground: Container, art: ShopTextures, width: number, height: number,
   state: State, options: ArtOptions = {}) {
@@ -105,6 +120,7 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
       const keeper = harborScene.animations.shopkeeper.idle.frames[0];
       const counter = harborScene.assets.merchant_counter?.file;
       if (counter) {
+        drawWindowDisplay(layer, art, layout, state, options);
         layer.addChild(placeSprite(art.harbor[keeper], toScreen([782, 190, 244, 184])));
         layer.addChild(placeSprite(art.harbor[counter], toScreen([628, 351, 568, 250])));
       }
@@ -149,6 +165,7 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
       }
     }
     if (!shelf?.goodId) return;
+    if (index === WINDOW_SLOT_INDEX) return;
     const stock = options.stock?.(shelf.goodId) ?? quantity(state, shelf.goodId);
     if (index < shelfFrontEdges.length) {
       const edge = shelfFrontEdges[index];

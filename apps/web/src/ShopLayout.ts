@@ -80,15 +80,15 @@ export function roomLayout(width: number, height: number) {
   const visitorH = portrait ? 100 : Math.min(225, height * .24);
   const visitorW = Math.min(visitorH * .90, width * .24);
   const visitor = { x: width * (portrait ? .12 : .34), y: counter.y - visitorH + 6, w: visitorW, h: visitorH };
-  // Three floor displays and the window display: two angled wall shelves, the center table, and the counter.
+  // Two wall shelves and the center table sit on the floor; the fourth display runs along the rear window sill.
   const sceneShelves = [
     mapScene([115, 177, 235, 114]),
     mapScene([115, 278, 235, 132]),
     mapScene([640, 610, 380, 105]),
-    mapScene([660, 365, 440, 100]),
+    mapScene([430, 205, 635, 78]),
   ];
   const sceneCounter = mapScene([628, 351, 568, 250]);
-  const book = mapScene([674, 380, 156, 82]);
+  const book = mapScene([674, 360, 156, 82]);
   const sceneBell = mapScene([1090, 305, 75, 124]);
   const sceneVisitor = mapScene([545, 348, 320, 320]);
   return {
