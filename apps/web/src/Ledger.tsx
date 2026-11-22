@@ -5,7 +5,7 @@ import type { Command } from '@undercut/contracts';
 import type { Campaign } from './App.js';
 
 export type LedgerPageId = 'overview' | 'markets' | 'suppliers' | 'inventory' | 'merchandising' | 'performance' | 'gazette' | 'events' | 'newspapers';
-type PageContext = { state: State; send: (command: Command) => void; busy: boolean; online: boolean };
+type PageContext = { state: State; send: (command: Command) => void; busy: boolean; online: boolean; pending: boolean };
 type LedgerPage = { id: LedgerPageId; title: string; render: (context: PageContext) => ReactNode };
 const goodName = (id: string) => GOODS.find(good => good.id === id)?.name ?? id;
 const townName = (id: string) => TOWNS.find(town => town.id === id)?.name ?? id;
@@ -58,26 +58,42 @@ const pages: LedgerPage[] = [
   </> },
   { id: 'performance', title: 'Performance', render: context => <PerformancePage {...context} /> },
   { id: 'markets', title: 'Markets', render: context => <MarketExplorer {...context} /> },
-  { id: 'suppliers', title: 'Suppliers', render: ({ state, send, busy, online }) => <>
+  { id: 'suppliers', title: 'Suppliers', render: ({ state, send, busy, online, pending }) => <>
     <p className="ledger-intro">Compare this town’s current offers before using one of your two vendor visits.</p>
     <p>Visits used: {state.visitedVendorIds.length} of 2</p>
     <div className="ledger-vendors">{VENDORS.filter(vendor => (state.vendorOffers[vendor.id] ?? []).length).map(vendor => {
       const active = state.activeVendorId === vendor.id;
       const visited = state.visitedVendorIds.includes(vendor.id);
+      const offers = state.vendorOffers[vendor.id] ?? [];
       return <article className="ledger-vendor" key={vendor.id}>
         <header><div><h3>{vendor.name}</h3><span>{state.vendorReputation[vendor.id]?.tier ?? 0} reputation tier</span></div>
           {!active && <button disabled={busy || !online || state.phase !== 'prepare' || state.buyingComplete || visited || state.visitedVendorIds.length >= 2 || !!state.activeVendorId}
             onClick={() => send({ type: 'visitVendor', vendorId: vendor.id })}>{visited ? 'Visited' : 'Begin visit'}</button>}
           {active && <button disabled={busy || !online} onClick={() => send({ type: 'leaveVendor' })}>End visit</button>}
         </header>
-        <div className="ledger-table" role="table" aria-label={`${vendor.name} offers`}>
-          <div role="row" className="ledger-table-head"><span role="columnheader">Offer</span><span role="columnheader">Price · stock</span><span role="columnheader">Buy</span></div>
-          {(state.vendorOffers[vendor.id] ?? []).map(offer => <div role="row" key={offer.id}>
-            <span role="cell">{goodName(offer.goodId)}{offer.requiredTier ? ` · Tier ${offer.requiredTier}` : ''}</span>
-            <span role="cell">{money(offer.unitCost)} · {offer.quantity}</span>
-            <span role="cell"><button disabled={!active || busy || !online || offer.quantity < 1 || state.gold < offer.unitCost}
-              onClick={() => send({ type: 'buy', offerId: offer.id, quantity: 1 })}>Buy 1</button></span>
-          </div>)}
+        <div className="ledger-offers" role="list" aria-label={`${vendor.name} offers`}>
+          {offers.map(offer => {
+            const isSale = offer.kind !== 'regular';
+            const locked = (offer.requiredTier ?? 0) > (state.vendorReputation[vendor.id]?.tier ?? 0);
+            const regularPrice = offers.find(candidate =>
+              candidate.kind === 'regular' && candidate.goodId === offer.goodId)?.unitCost;
+            const saving = regularPrice === undefined ? 0 : Math.max(0, regularPrice - offer.unitCost);
+            const stock = locked ? `Tier ${offer.requiredTier} required`
+              : offer.quantity > 0 ? `${offer.quantity} available` : 'Sold out';
+            return <div role="listitem" key={offer.id}>
+              <button type="button" className={`ledger-offer${isSale ? ' on-sale' : ''}`}
+                aria-label={`Buy 1 ${goodName(offer.goodId)}${isSale ? ` · ${offer.kind === 'dailyDeal' ? 'daily deal' : 'reputation deal'}` : ''} for ${money(offer.unitCost)} · ${stock}`}
+                disabled={!active || busy || pending || !online || state.phase !== 'prepare' || state.buyingComplete
+                  || locked || offer.quantity < 1 || state.gold < offer.unitCost}
+                onClick={() => send({ type: 'buy', offerId: offer.id, quantity: 1 })}>
+                <span className="ledger-offer-name">{goodName(offer.goodId)}
+                  {isSale && <small className="ledger-sale-badge">{offer.kind === 'dailyDeal' ? 'Daily deal' : `Reputation deal · Tier ${offer.requiredTier}`}{saving > 0 ? ` · Save ${money(saving)}` : ''}</small>}
+                </span>
+                <span className="ledger-offer-price">{money(offer.unitCost)} <small>per item</small></span>
+                <span className="ledger-offer-stock">{stock}<small>Tap item to buy 1</small></span>
+              </button>
+            </div>;
+          })}
         </div>
       </article>;
     })}</div>
@@ -395,7 +411,7 @@ export function Ledger({ campaign, page, setPage, close, send, busy, online }: {
         {pages.map(item => <button type="button" key={item.id} className={page === item.id ? 'active' : ''}
           aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}>{item.title}</button>)}
       </nav>
-      <div className="ledger-content" key={page}><h2>{selected.title}</h2>{selected.render({ state: campaign.state, send, busy, online })}</div>
+      <div className="ledger-content" key={page}><h2>{selected.title}</h2>{selected.render({ state: campaign.state, send, busy, online, pending })}</div>
       <footer className="ledger-book-footer"><span>Campaign record · Revision {campaign.revision}</span>
         {campaign.state.phase === 'report'
           ? <button className="primary" type="button" disabled={busy || !online}

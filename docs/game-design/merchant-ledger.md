@@ -66,7 +66,7 @@ Automatically present the appropriate workspace after an authoritative stage tra
 
 Keep the existing limit of two distinct vendor visits per day, including the cost of starting a visit even if no purchase occurs. After arrival, allow inspection of all local vendors' inventory, effective prices, quantities, offers, and reputation before committing a visit. Show a consolidated comparison with expandable details, meaningful differences between vendors, visited/active status and remaining visits.
 
-Allow inline quantity selection, clear unit and total costs, available gold, availability and reputation requirements. Make purchase confirmation straightforward and keep the player in the same workspace after purchase. Preserve existing vendor availability, visit restrictions, reputation benefits and actual paid cost accounting. Finishing or skipping purchases automatically advances to preparation.
+Make each offer row the purchase target: tapping an available row buys one unit, without a separate Buy button. Show unit cost and remaining stock, and clearly badge daily and reputation deals as sale offers. Keep vendor visit controls separate because starting a visit commits one of the day's limited visits. Disable rows when the vendor is inactive, the offer is locked or sold out, or the player cannot afford one unit. Keep the player in the same workspace after purchase and preserve actual paid cost accounting. Finishing or skipping purchases automatically advances to preparation.
 
 ## Merchandising and daily pricing
 

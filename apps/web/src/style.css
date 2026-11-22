@@ -176,6 +176,16 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
 .ledger-vendor .ledger-table { margin-bottom: 0; }
 .ledger-vendor .ledger-table>div { grid-template-columns: minmax(0,1fr) minmax(105px,.7fr) auto; }
 .ledger-vendor .ledger-table button { padding: 6px 10px; min-height: 36px; }
+.ledger-offers { display: grid; gap: 7px; margin-top: 12px; }
+.ledger-offer { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 12px; padding: 9px 12px; text-align: left; border-color: #51434f; background: #211b25; }
+.ledger-offer:hover:not(:disabled) { background: #352b37; border-color: #bda77f; }
+.ledger-offer.on-sale { border-color: #c99d5e; background: linear-gradient(100deg,#493725,#302833 78%); box-shadow: inset 3px 0 #edc477; }
+.ledger-offer.on-sale:hover:not(:disabled) { background: linear-gradient(100deg,#5a432b,#3b3038 78%); border-color: #edc477; }
+.ledger-offer-name { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.ledger-sale-badge { padding: 2px 7px; border: 1px solid #c99d5e; border-radius: 999px; background: #62492e; color: #ffe1a3; font-size: .68rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.ledger-offer-price,.ledger-offer-stock { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ledger-offer-price small,.ledger-offer-stock small { display: block; color: #b4aab4; font-size: .68rem; font-weight: 400; }
+.ledger-offer-stock { text-align: right; }
 .ledger-display-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 18px 0; }
 .ledger-display { min-width: 0; padding: 14px; border: 1px solid #493b47; border-radius: 8px; background: #29232d; }
 .ledger-display h3 { color: #f0d7ad; }
@@ -245,6 +255,9 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
   .ledger-nav button { padding: 7px 10px; font-size: .76rem; }
   .ledger-content { padding: 17px 15px; }
   .ledger-table>div { grid-template-columns: minmax(0,1fr) minmax(58px,.5fr) minmax(72px,.65fr); gap: 6px; padding: 8px; font-size: .79rem; }
+  .ledger-offer { grid-template-columns: minmax(0,1fr) auto; gap: 6px 10px; padding: 9px 10px; font-size: .83rem; }
+  .ledger-offer-stock { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 8px; text-align: left; color: #c7bac8; font-size: .75rem; }
+  .ledger-offer-stock small { text-align: right; }
   .performance-products>div { grid-template-columns: minmax(112px,1fr) repeat(4,minmax(72px,.72fr)); }
   .ledger-metrics { grid-template-columns: repeat(2,1fr); gap: 6px; }
   .ledger-metrics>div { padding: 10px 8px; }
