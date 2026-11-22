@@ -59,7 +59,8 @@ export function roomLayout(width: number, height: number) {
   const doorCenter = door.x + door.w / 2;
   const dialAboveDoor = (w: number): Bounds => {
     const h = w / dialAspect;
-    return { x: doorCenter - w / 2, y: door.y - h + 4, w, h };
+    const x = Math.max(7, Math.min(width - w - 7, doorCenter - w / 2));
+    return { x, y: door.y - h + 4, w, h };
   };
   const journalX = width < 710 ? 11 : 22;
   const journal = { x: journalX, y: 65, w: Math.min(155, window.x - journalX - 8), h: 44 };
@@ -67,8 +68,7 @@ export function roomLayout(width: number, height: number) {
   const dialRoom = portrait ? (door.y - journal.y - journal.h + 4) * dialAspect : compactDialWidth;
   const dial = dialAboveDoor(Math.min(compactDialWidth, dialRoom));
   const travelDial = dialAboveDoor(Math.min(288, door.w * 1.65,
-    Math.max(38, (door.y - wallTop + 4) * dialAspect),
-    Math.max(38, (doorCenter - 7) * 2), Math.max(38, (width - doorCenter - 7) * 2)));
+    Math.max(38, (door.y - wallTop + 4) * dialAspect)));
   const shelfW = Math.min(width * (narrow ? .25 : .19), height * .29);
   const shelfH = portrait ? 46 : Math.min(105, height * .14);
   // Keep the aisle from the door to the counter clear at either aspect ratio.
