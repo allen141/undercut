@@ -429,7 +429,7 @@ test('previews towns on the dial and confirms the destination', { tag: '@smoke' 
   const { bookBelowWall, window, door, horizon, page: reading, travelDial, shelves } = room.layout;
   expect(window.w / room.layout.scene.w).toBeGreaterThan(.4);
   expect(door.w / room.width).toBeGreaterThan(.145);
-  expect(window.y).toBeLessThan(74);
+  expect(window.y).toBeLessThan(bookBelowWall ? reading.y : 74);
   expect(window.y + window.h).toBeCloseTo(horizon);
   expect(window.x + window.w).toBeLessThan(door.x);
   expect(travelDial.x + travelDial.w / 2).toBeCloseTo(door.x + door.w / 2, 0);
