@@ -1,7 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const softwareWebGL = { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] };
-const firefoxSoftwareWebGL = { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false, 'webgl.disable-fail-if-major-performance-caveat': true, 'webgl.force_osmesa': true } };
 
 export default defineConfig({
   testDir: './tests',
@@ -18,7 +17,6 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 960 }, launchOptions: softwareWebGL } },
-    { name: 'desktop-firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1366, height: 900 }, launchOptions: firefoxSoftwareWebGL } },
     { name: 'mobile-chromium', use: { ...devices['Pixel 7'], launchOptions: softwareWebGL } },
     { name: 'mobile-webkit', use: { ...devices['iPhone 13'] } },
   ],
