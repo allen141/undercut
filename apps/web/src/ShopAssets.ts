@@ -15,7 +15,11 @@ const harborArtUrls = import.meta.glob('./demo-assets/harbor/art/**/*.png', {
 type HarborManifest = {
   background: string;
   assets: Record<string, { file: string }>;
-  objects: Array<{ asset?: string; sprite_animation?: string }>;
+  objects: Array<{
+    asset?: string;
+    sprite_animation?: string;
+    composite?: { desk_asset?: string };
+  }>;
   animations: { shopkeeper: Record<string, { frames: string[] }> };
 };
 const harborManifest = harborSceneData as unknown as HarborManifest;
@@ -55,8 +59,10 @@ export async function loadShopTextures(): Promise<ShopTextures> {
   ]));
   const harborPaths = Array.from(new Set([
     harborManifest.background,
-    ...harborManifest.objects.flatMap(object => object.asset
-      ? [harborManifest.assets[object.asset]?.file].filter((path): path is string => !!path) : []),
+    ...harborManifest.objects.flatMap(object => [
+      ...(object.asset ? [harborManifest.assets[object.asset]?.file] : []),
+      ...(object.composite?.desk_asset ? [harborManifest.assets[object.composite.desk_asset]?.file] : []),
+    ].filter((path): path is string => !!path)),
     ...harborManifest.animations.shopkeeper.idle.frames.slice(0, 1),
   ]));
   const harborUrls = harborPaths.map(path => {
