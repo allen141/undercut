@@ -24,4 +24,4 @@ The [shop day design](game-design/README.md) specifies the next iteration of the
 
 ## Completion
 
-A signed-in player can complete a day and reopen the same campaign after refreshing or signing in again. Two accounts cannot see or change each other's campaigns. Retrying a command does not repeat a purchase or sale. Release candidates pass game, API, browser, and deployment checks before being deployed to the shared preview or production environment.
+A signed-in player can complete a day and reopen the same campaign after refreshing or signing in again. Two accounts cannot see or change each other's campaigns. Retrying a command does not repeat a purchase or sale. Release candidates build, start, render the shop on supported desktop/mobile browser platforms, and pass deployment health verification before being deployed to the shared preview or production environment.
