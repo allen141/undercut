@@ -18,6 +18,7 @@ export const FLOOR_SHELF_COUNT = 3;
 export const WINDOW_SLOT_INDEX = FLOOR_SHELF_COUNT;
 export const CUSTOMERS_PER_DAY = 8;
 export const DISPLAY_CAPACITY = 3;
+export const RESTOCK_WAIT_MS = 3000;
 export type PricePreset = 80 | 100 | 120;
 const DISPLAY_COUNT = FLOOR_SHELF_COUNT + 1;
 const STANDOUT_COUNT_WEIGHTS = [1, 2, 1] as const;
@@ -102,6 +103,7 @@ type ShopLoopState = {
   displayStock?: number[];
   pricePresets?: PricePreset[];
   businessMode?: boolean;
+  pendingRestock?: { customerIndex: number; slot: number; goodId: GoodId } | null;
 };
 export type State = LegacyState & ShopLoopState;
 
@@ -146,6 +148,7 @@ export function newGame(seed: number): State {
     displayStock: Array.from({ length: DISPLAY_COUNT }, () => 0),
     pricePresets: Array.from({ length: DISPLAY_COUNT }, () => 100),
     businessMode: false,
+    pendingRestock: null,
   };
 }
 
@@ -184,6 +187,7 @@ export function upgradeState(previous: LegacyState | State): State {
     displayStock: saved.displayStock?.length === DISPLAY_COUNT ? saved.displayStock : undefined,
     pricePresets: saved.pricePresets?.length === DISPLAY_COUNT ? saved.pricePresets : Array.from({ length: DISPLAY_COUNT }, () => 100),
     businessMode: saved.businessMode === true,
+    pendingRestock: saved.pendingRestock ?? null,
   };
 }
 
@@ -252,6 +256,19 @@ function closeDay(state: State) {
   });
 }
 
+function resolveRestockWait(state: State) {
+  const pending = state.pendingRestock;
+  requireRule(state.phase === 'open' && state.businessMode && pending, 'There is no waiting customer.');
+  const customer = state.customers[pending.customerIndex];
+  requireRule(pending.customerIndex === state.served && customer, 'The waiting customer has changed.');
+  const name = GOODS.find(good => good.id === customer.goodId)!.name;
+  state.log.push(`Wanted ${name}: sold out.`);
+  state.customerResults.push({ customerIndex: state.served, goodId: customer.goodId, result: 'soldOut', price: null });
+  state.served++;
+  state.pendingRestock = null;
+  if (state.served === state.customers.length) closeDay(state);
+}
+
 function advanceBusiness(state: State) {
   while (state.served < state.customers.length) {
     const customer = state.customers[state.served];
@@ -267,6 +284,11 @@ function advanceBusiness(state: State) {
     } else if (state.displayStock && state.displayStock.length === DISPLAY_COUNT
       ? state.displayStock[state.shelves.indexOf(shelf)] === 0
       : quantity(state, customer.goodId) === 0) {
+      const slot = state.shelves.indexOf(shelf);
+      if (state.businessMode && slot >= 0 && quantity(state, customer.goodId) > 0) {
+        state.pendingRestock = { customerIndex: state.served, slot, goodId: customer.goodId };
+        return;
+      }
       result = 'soldOut';
       message = `Wanted ${good.name}: sold out.`;
     } else if (customer.bargainDiscount && shelf.price > 1) {
@@ -415,9 +437,11 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
     }
 
     case 'restockDisplay': {
-      requireRule(state.phase === 'open' && !state.pendingNegotiation, 'A display can only be refilled during business.');
+      requireRule(state.phase === 'open' && state.businessMode && state.displayStock?.length === DISPLAY_COUNT && !state.pendingNegotiation,
+        'A display can only be refilled during current business.');
       const { slot } = command;
       requireRule(slot >= 0 && slot < DISPLAY_COUNT, 'Unknown display.');
+      requireRule(!state.pendingRestock || state.pendingRestock.slot === slot, 'Refill the display requested by the waiting customer.');
       const goodId = state.shelves[slot].goodId;
       requireRule(goodId, 'That display is empty.');
       const displayed = state.displayStock![slot] ?? 0;
@@ -426,6 +450,12 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
       requireRule(moved > 0, 'There is no reserve stock for this display.');
       restockedQuantity = moved;
       state.displayStock![slot] += moved;
+      state.pendingRestock = null;
+      break;
+    }
+
+    case 'resolveRestockWait': {
+      resolveRestockWait(state);
       break;
     }
 
@@ -442,7 +472,8 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
     case 'serve': {
       requireRule(state.phase === 'open', 'The shop is not open.');
       requireRule(!state.pendingNegotiation, 'Answer the customer’s offer first.');
-      advanceBusiness(state);
+      if (state.pendingRestock) resolveRestockWait(state);
+      else advanceBusiness(state);
       break;
     }
 
@@ -482,6 +513,7 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
       state.customerResults.push({ customerIndex: state.served, goodId, result, price: salePrice });
       state.served++;
       state.pendingNegotiation = null;
+      state.pendingRestock = null;
       if (state.businessMode && state.served === state.customers.length) closeDay(state);
       else if (!state.businessMode) advanceBusiness(state);
       break;
@@ -570,7 +602,7 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
     record({ day: state.day, type: 'shopOpened', shelves: state.shelves.map((shelf, slot) => ({ slot, ...shelf })) });
   }
 
-  if (command.type === 'serve' || command.type === 'negotiate') {
+  if (command.type === 'serve' || command.type === 'negotiate' || command.type === 'resolveRestockWait') {
     const priorResults = prior.customerResults;
     for (const result of state.customerResults.slice(priorResults.length)) {
       record({

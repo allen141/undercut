@@ -2,7 +2,7 @@ import { AccessibilitySystem, Application, Container, Graphics, Rectangle, Sprit
 import 'pixi.js/browser';
 import 'pixi.js/unsafe-eval';
 import {
-  CUSTOMERS_PER_DAY, GOODS, MAX_VENDOR_VISITS, REPUTATION_TIERS, TOWNS, WINDOW_SLOT_INDEX,
+  CUSTOMERS_PER_DAY, GOODS, MAX_VENDOR_VISITS, REPUTATION_TIERS, RESTOCK_WAIT_MS, TOWNS, WINDOW_SLOT_INDEX,
   inventoryValue, priceRange, quantity, reputationFor, vendorOffersForTown, vendorsInTown, type CustomerResult, type GoodId,
   newspaperForDay,
 } from '@undercut/game-core';
@@ -371,7 +371,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const cash = state.gold - laterRevenue;
     const latest = state.customerResults.find(result => result.customerIndex === served - 1);
     const latestOutcome = latest ? outcome(latest) : undefined;
-    const request = playback ? state.customers[playback.index]?.goodId : undefined;
+    const request = playback ? state.customerResults.find(result => result.customerIndex === playback.index)?.goodId : undefined;
     const activeResult = playback?.revealed ? latestOutcome : undefined;
     const requestText = request ? `Looking for ${nameOf(request)}` : 'Arriving at the shop';
     const offer = state.pendingNegotiation;
@@ -491,7 +491,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         const tagW = Math.min(bounds.w - 3, 142);
         const tagY = slot < 2 ? bounds.y + bounds.h * .66 : bounds.y + bounds.h - 15;
         box(scene, rect(bounds.x + (bounds.w - tagW) / 2, tagY, tagW, 28), ink, 0x815e4b, .92, 4);
-        const count = shelf.goodId ? visibleStock(shelf.goodId) : 0;
+        const count = shelf.goodId ? phase === 'open' && state.displayStock
+          ? state.displayStock[slot] : visibleStock(shelf.goodId) : 0;
         const caption = shelf.goodId ? `${nameOf(shelf.goodId)} · ${phase === 'open' ? `${count} left` : money(shelf.price)}` : displayName(slot);
         text(scene, caption, bounds.x + bounds.w / 2,
           tagY + 14, { align: 'center', size: 11, max: tagW - 5 });
@@ -542,6 +543,22 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         scene.addChild(good, coin);
         text(scene, `+${money(sale.price!)}`, cardX + cardW - 65, cardY + 77, { size: 19, color: gold });
       }
+    }
+    if (!modal && state.pendingRestock) {
+      const { slot, customerIndex } = state.pendingRestock;
+      const goodId = state.pendingRestock?.customerIndex === customerIndex ? state.pendingRestock.goodId : undefined;
+      const body = layout.sceneVisitor;
+      const cardW = Math.min(narrow ? 300 : 390, w - margin * 2);
+      const cardX = Math.max(margin, Math.min(w - margin - cardW, body.x + body.w / 2 - cardW / 2));
+      const cardY = layout.bookBelowWall ? layout.page.y + 25 : Math.max(104, body.y - 126);
+      box(scene, rect(cardX, cardY, cardW, 112), 0x382a2d, 0xd4b67d, .98, 9);
+      text(scene, 'A customer is waiting', cardX + 14, cardY + 20, { size: 13, color: gold });
+      text(scene, goodId ? `Looking for ${nameOf(goodId)}` : 'Looking for a displayed good', cardX + 14, cardY + 47,
+        { size: 19, serif: true, max: cardW - 28 });
+      text(scene, 'Refill now, or the visit resolves shortly.', cardX + 14, cardY + 73, { size: 12, color: muted });
+      control(scene, 'restock-waiting-display', 'Refill requested display',
+        rect(cardX + cardW - 134, cardY + 78, 122, 28), () => p.send({ type: 'restockDisplay', slot }),
+        { copy: 'Refill display', primary: true, disabled: blocked });
     }
 
     const tip = !p.online ? 'You’re offline. Reconnect to continue trading.' : p.error || (
@@ -1120,12 +1137,13 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const { revision, state } = p.campaign;
     if (state.phase !== 'open' || state.pendingNegotiation || playback || p.busy || p.pending || !p.online ||
       attemptedRevision === revision) return;
+    const restockWait = !!state.pendingRestock;
     timer = setTimeout(() => {
       const latest = props();
       if (latest.campaign.revision !== revision || latest.busy || latest.pending || !latest.online) return;
       attemptedRevision = revision;
-      latest.send({ type: 'serve' });
-    }, reducedMotion.matches ? 0 : 260);
+      latest.send(restockWait ? { type: 'resolveRestockWait' } : { type: 'serve' });
+    }, restockWait ? RESTOCK_WAIT_MS : reducedMotion.matches ? 0 : 260);
   }
 
   function showOutcome() {

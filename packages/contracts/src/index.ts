@@ -24,6 +24,7 @@ export const commandSchema = z.discriminatedUnion('type', [
     })).length(4),
   }),
   z.object({ type: z.literal('restockDisplay'), slot: z.number().int().min(0).max(3) }),
+  z.object({ type: z.literal('resolveRestockWait') }),
   z.object({ type: z.literal('open') }),
   z.object({ type: z.literal('serve') }),
   z.object({ type: z.literal('negotiate'), outcome: negotiationOutcomeSchema }),

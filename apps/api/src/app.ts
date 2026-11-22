@@ -93,6 +93,10 @@ export function buildApp() {
     return session.user.id;
   }
 
+  function campaignResponse<T extends { state: { customers: unknown[] } }>(campaign: T): T {
+    return { ...campaign, state: { ...campaign.state, customers: [] } };
+  }
+
   app.get('/api/v1/campaigns', async (request) => {
     const userId = await owner(request.headers);
     return db.select({
@@ -115,7 +119,7 @@ export function buildApp() {
     const [campaign] = await db.select().from(campaigns)
       .where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)));
     if (!campaign || campaign.name !== name) throw new HttpError(409, 'Campaign creation identifier already used.');
-    return campaign;
+    return campaignResponse(campaign);
   });
 
   app.get('/api/v1/campaigns/:id', async (request) => {
@@ -124,7 +128,7 @@ export function buildApp() {
     const [campaign] = await db.select().from(campaigns)
       .where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)));
     if (!campaign) throw new HttpError(404, 'Campaign not found.');
-    return { ...campaign, state: upgradeState(campaign.state) };
+    return campaignResponse({ ...campaign, state: upgradeState(campaign.state) });
   });
 
   app.post('/api/v1/campaigns/:id/commands', async (request) => {
@@ -133,7 +137,7 @@ export function buildApp() {
     const input = commandRequestSchema.parse(request.body);
     const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
 
-    return db.transaction(async (tx) => {
+    const updated = await db.transaction(async (tx) => {
       const [campaign] = await tx.select().from(campaigns)
         .where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)))
         .for('update');
@@ -166,6 +170,7 @@ export function buildApp() {
       });
       return updated;
     });
+    return campaignResponse(updated);
   });
 
   return app;
