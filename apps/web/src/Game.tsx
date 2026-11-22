@@ -168,6 +168,6 @@ export function Game(props: GameProps) {
       </>}
     </div>}
     {ledgerOpen && <Ledger campaign={campaign} page={ledgerPage} setPage={setLedgerPage} close={closeLedger}
-      send={command => props.send(command)} busy={busy} online={online} />}
+      send={command => props.send(command)} busy={busy} online={online} pending={pending} />}
   </main>;
 }

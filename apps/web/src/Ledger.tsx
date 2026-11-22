@@ -198,7 +198,7 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
   </>;
 }
 
-function PerformancePage({ state, send, busy, online }: PageContext) {
+function PerformancePage({ state }: PageContext) {
   const [townFilter, setTownFilter] = useState('all');
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const history = state.history.filter(day => townFilter === 'all' || day.townId === townFilter);
@@ -302,8 +302,6 @@ function PerformancePage({ state, send, busy, online }: PageContext) {
         </div>)}
       </div>}
     </>}
-    {state.phase === 'report' && <button className="primary begin-next-day" disabled={busy || !online}
-      onClick={() => send({ type: 'nextDay' })}>Begin next day</button>}
   </>;
 }
 
@@ -364,7 +362,7 @@ function MarketHistory({ events }: { events: JournalEvent[] }) {
 
 export function Ledger({ campaign, page, setPage, close, send, busy, online }: {
   campaign: Campaign; page: LedgerPageId; setPage: (page: LedgerPageId) => void; close: () => void;
-  send: (command: Command) => void; busy: boolean; online: boolean;
+  send: (command?: Command) => void; busy: boolean; online: boolean; pending: boolean;
 }) {
   const dialog = useRef<HTMLElement>(null);
   const selected = useMemo(() => pages.find(candidate => candidate.id === page) ?? pages[0], [page]);
@@ -398,7 +396,14 @@ export function Ledger({ campaign, page, setPage, close, send, busy, online }: {
           aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}>{item.title}</button>)}
       </nav>
       <div className="ledger-content" key={page}><h2>{selected.title}</h2>{selected.render({ state: campaign.state, send, busy, online })}</div>
-      <footer className="ledger-book-footer"><span>Campaign record · Revision {campaign.revision}</span><button type="button" onClick={close}>Continue trading</button></footer>
+      <footer className="ledger-book-footer"><span>Campaign record · Revision {campaign.revision}</span>
+        {campaign.state.phase === 'report'
+          ? <button className="primary" type="button" disabled={busy || !online}
+            onClick={() => send(pending ? undefined : { type: 'nextDay' })}>
+            {pending ? 'Confirm pending action' : `Begin day ${campaign.state.day + 1}`}
+          </button>
+          : <button type="button" onClick={close}>Continue trading</button>}
+      </footer>
     </section>
   </div>;
 }
