@@ -48,6 +48,24 @@
       "opacity": 0.24
     },
     {
+      "id": "left_wall_display",
+      "asset": "left_wall_shelves",
+      "rect": [
+        0,
+        0,
+        420,
+        880
+      ],
+      "z_order": 30,
+      "visible": true,
+      "group": "architecture",
+      "interaction": {
+        "cursor": "pointer",
+        "action": "inspect:left_wall",
+        "label": "Left Wall"
+      }
+    },
+    {
       "id": "left_shelving",
       "asset": "left_shelf",
       "rect": [
@@ -59,6 +77,7 @@
       "z_order": 10,
       "visible": true,
       "group": "furniture",
+      "composite_member_of": "left_wall_display",
       "opacity": 1,
       "interaction": {
         "cursor": "pointer",
@@ -67,13 +86,13 @@
       }
     },
     {
-      "id": "closed_door",
-      "asset": "door_closed",
+      "id": "right_wall_closed",
+      "asset": "right_wall_closed",
       "rect": [
-        1148,
-        140,
-        270,
-        420
+        1144,
+        0,
+        304,
+        780
       ],
       "z_order": 12,
       "visible": true,
@@ -82,17 +101,23 @@
       "interaction": {
         "cursor": "pointer",
         "action": "toggle:door",
-        "label": "Closed Door"
-      }
+        "label": "Right wall with closed door"
+      },
+      "interaction_rect": [
+        1170,
+        170,
+        278,
+        500
+      ]
     },
     {
-      "id": "open_door",
-      "asset": "door_open",
+      "id": "right_wall_open",
+      "asset": "right_wall_open",
       "rect": [
-        1148,
-        140,
-        270,
-        420
+        1144,
+        0,
+        304,
+        780
       ],
       "z_order": 12,
       "visible": false,
@@ -101,8 +126,14 @@
       "interaction": {
         "cursor": "pointer",
         "action": "toggle:door",
-        "label": "Open Door"
-      }
+        "label": "Right wall with open door"
+      },
+      "interaction_rect": [
+        1170,
+        170,
+        278,
+        500
+      ]
     },
     {
       "id": "additional_step",
@@ -117,25 +148,6 @@
       "visible": false,
       "group": "architecture",
       "opacity": 1
-    },
-    {
-      "id": "counter",
-      "asset": "merchant_counter",
-      "rect": [
-        628,
-        351,
-        568,
-        250
-      ],
-      "z_order": 22,
-      "visible": true,
-      "group": "furniture",
-      "opacity": 1,
-      "interaction": {
-        "cursor": "pointer",
-        "action": "inspect:counter",
-        "label": "Counter"
-      }
     },
     {
       "id": "main_table",
@@ -157,21 +169,36 @@
       }
     },
     {
-      "id": "shopkeeper",
+      "id": "merchant_station",
       "sprite_animation": "idle",
       "rect": [
-        782,
-        200,
-        244,
-        184
+        628,
+        190,
+        568,
+        411
       ],
-      "z_order": 17,
+      "z_order": 22,
       "visible": true,
-      "group": "characters",
+      "group": "merchant_station",
+      "composite": {
+        "desk_asset": "merchant_counter",
+        "desk_rect": [
+          0,
+          161,
+          568,
+          250
+        ],
+        "keeper_rect": [
+          154,
+          0,
+          244,
+          184
+        ]
+      },
       "interaction": {
         "cursor": "pointer",
         "action": "dialogue:shopkeeper",
-        "label": "Talk to shopkeeper"
+        "label": "Merchant station"
       }
     },
     {
@@ -247,16 +274,18 @@
     },
     {
       "id": "shelf_bottle_teal",
+      "anchor": "shelf_top",
       "asset": "bottle_teal_tall",
       "rect": [
-        295,
-        199,
+        279,
+        -111,
         59,
         110
       ],
       "z_order": 25,
       "visible": true,
       "group": "merchandise",
+      "composite_member_of": "left_wall_display",
       "opacity": 1,
       "interaction": {
         "cursor": "pointer",
@@ -266,16 +295,18 @@
     },
     {
       "id": "shelf_bottle_amber",
+      "anchor": "shelf_top",
       "asset": "bottle_amber",
       "rect": [
-        388,
-        213,
+        372,
+        -85,
         59,
         85
       ],
       "z_order": 25,
       "visible": true,
       "group": "merchandise",
+      "composite_member_of": "left_wall_display",
       "opacity": 1,
       "interaction": {
         "cursor": "pointer",
@@ -285,16 +316,18 @@
     },
     {
       "id": "shelf_gem",
+      "anchor": "shelf_lower",
       "asset": "gem_blue",
       "rect": [
-        215,
-        329,
+        199,
+        -95,
         112,
         95
       ],
       "z_order": 26,
       "visible": true,
       "group": "merchandise",
+      "composite_member_of": "left_wall_display",
       "opacity": 1,
       "interaction": {
         "cursor": "pointer",
@@ -304,16 +337,18 @@
     },
     {
       "id": "shelf_chest",
+      "anchor": "shelf_lower",
       "asset": "treasure_chest",
       "rect": [
-        370,
-        420,
+        354,
+        -84,
         99,
         84
       ],
       "z_order": 26,
       "visible": true,
       "group": "merchandise",
+      "composite_member_of": "left_wall_display",
       "opacity": 1,
       "interaction": {
         "cursor": "pointer",
@@ -323,16 +358,18 @@
     },
     {
       "id": "shelf_jar",
+      "anchor": "shelf_lower",
       "asset": "ceramic_jar",
       "rect": [
-        260,
-        427,
+        244,
+        -91,
         93,
         91
       ],
       "z_order": 26,
       "visible": true,
       "group": "merchandise",
+      "composite_member_of": "left_wall_display",
       "opacity": 1,
       "interaction": {
         "cursor": "pointer",
@@ -342,16 +379,18 @@
     },
     {
       "id": "shelf_rope",
+      "anchor": "shelf_lower",
       "asset": "rope_coil_large",
       "rect": [
-        145,
-        451,
+        129,
+        -80,
         104,
         80
       ],
       "z_order": 26,
       "visible": true,
       "group": "merchandise",
+      "composite_member_of": "left_wall_display",
       "opacity": 1,
       "interaction": {
         "cursor": "pointer",
@@ -371,6 +410,7 @@
       "z_order": 29,
       "visible": true,
       "group": "lighting",
+      "composite_member_of": "left_wall_display",
       "opacity": 1,
       "interaction": {
         "cursor": "pointer",
@@ -390,6 +430,7 @@
       "z_order": 30,
       "visible": true,
       "group": "decor",
+      "composite_member_of": "left_wall_display",
       "opacity": 1
     },
     {
@@ -404,6 +445,7 @@
       "z_order": 30,
       "visible": true,
       "group": "decor",
+      "composite_member_of": "left_wall_display",
       "opacity": 1
     },
     {
@@ -553,6 +595,10 @@
       "opacity": 1
     }
   ],
+  "anchors": {
+    "shelf_top": { "point": [16, 310] },
+    "shelf_lower": { "point": [16, 535] }
+  },
   "animations": {
     "shopkeeper": {
       "idle": {
@@ -659,6 +705,39 @@
     "shopkeeper_animation": "idle"
   },
   "assets": {
+    "left_wall_blank": {
+      "file": "art/backgrounds/left_wall_blank.png",
+      "dimensions": [
+        420,
+        880
+      ],
+      "source_sheet": "harbor_empty_1448x1086.png",
+      "source_region": [
+        0,
+        0,
+        420,
+        880
+      ],
+      "quality_note": "Pixel-exact extraction of the original blank left wall from the near timber post to the window-side teal post; transparent outside the wall silhouette."
+    },
+    "left_wall_shelves": {
+      "file": "art/backgrounds/left_wall_shelves.png",
+      "dimensions": [
+        420,
+        880
+      ],
+      "source_sheet": "left_wall_blank.png",
+      "quality_note": "Composite of the exact left_wall_blank.png extraction and the transparent left_wall_shelf_overlay.png layer. The wall framing and plaster retain the original room pixels; only the shelf silhouettes are added."
+    },
+    "left_wall_shelf_overlay": {
+      "file": "art/furniture/left_wall_shelf_overlay.png",
+      "dimensions": [
+        420,
+        880
+      ],
+      "source_sheet": "left_wall_shelves.png",
+      "quality_note": "Transparent two-tier shelf cutout retained as the editable source layer for the matched wall composite."
+    },
     "left_shelf": {
       "file": "art/furniture/left_shelf.png",
       "dimensions": [
@@ -704,35 +783,35 @@
       ],
       "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
     },
-    "door_closed": {
-      "file": "art/furniture/door_closed.png",
+    "right_wall_closed": {
+      "file": "art/furniture/right_wall_closed.png",
       "dimensions": [
-        315,
-        440
+        304,
+        780
       ],
-      "source_sheet": "faceted_harbor_shop_asset_sprite_sheet.png",
+      "source_sheet": "harbor_empty_1448x1086.png",
       "source_region": [
-        15,
-        576,
-        349,
-        1034
+        1144,
+        0,
+        304,
+        780
       ],
-      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+      "quality_note": "AI-generated complete right-wall state with the closed door integrated into the arch"
     },
-    "door_open": {
-      "file": "art/furniture/door_open.png",
+    "right_wall_open": {
+      "file": "art/furniture/right_wall_open.png",
       "dimensions": [
-        307,
-        451
+        304,
+        780
       ],
-      "source_sheet": "faceted_harbor_shop_asset_sprite_sheet.png",
+      "source_sheet": "harbor_empty_1448x1086.png",
       "source_region": [
-        353,
-        574,
-        683,
-        1042
+        1144,
+        0,
+        304,
+        780
       ],
-      "quality_note": "AI-generated cutout; alpha masks cleaned automatically; inspect edges before production"
+      "quality_note": "AI-generated complete right-wall state with the open door integrated into the arch"
     },
     "red_rug": {
       "file": "art/furniture/red_rug.png",

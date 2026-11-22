@@ -103,11 +103,12 @@ export function roomLayout(width: number, height: number) {
   const visitor = { x: width * (portrait ? .12 : .34), y: counter.y - visitorH + 6, w: visitorW, h: visitorH };
   const sceneDoor = mapScene([1148, 140, 270, 420]);
   const sceneWindow = mapScene([410, 12, 650, 270]);
+  // Three floor displays and the window display: two angled wall shelves, the center table, and the counter.
   const sceneShelves = [
-    mapScene([270, 184, 178, 126]),
-    mapScene([194, 309, 178, 118]),
-    mapScene([118, 420, 280, 120]),
-    mapScene([632, 558, 420, 112]),
+    mapScene([115, 177, 235, 114]),
+    mapScene([115, 278, 235, 132]),
+    mapScene([640, 610, 380, 105]),
+    mapScene([660, 365, 440, 100]),
   ];
   const sceneCounter = mapScene([628, 351, 568, 250]);
   const sceneBell = mapScene([1090, 305, 75, 124]);

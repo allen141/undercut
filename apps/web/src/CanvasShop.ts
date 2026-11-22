@@ -328,8 +328,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const customerY = body.y + body.h * .64 + visitor.y;
     if (display && progress < .91) {
       const t = Math.min(1, progress / .75);
-      const fromX = display.x + display.w * .18;
-      const fromY = display.y + display.h * (slot === WINDOW_SLOT_INDEX ? .80 : .57);
+      const fromX = display.x + display.w * (slot < 2 ? .50 : .18);
+      const fromY = display.y + display.h * (slot < 2 ? .50 : slot === WINDOW_SLOT_INDEX ? .80 : .57);
       setGood(tradedGood, textures, result.goodId, animateArc(fromX, customerX, t), animateArc(fromY, customerY, t) -
         Math.sin(Math.PI * t) * 24, 18);
     }
@@ -489,11 +489,12 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         if (phase === 'prepare') control(scene, `shelf-${slot}`, displayName(slot), bounds, () => setup(slot, `shelf-${slot}`), { hide: true });
         if (phase === 'open' && !shelf.goodId) return;
         const tagW = Math.min(bounds.w - 3, 142);
-        box(scene, rect(bounds.x + (bounds.w - tagW) / 2, bounds.y + bounds.h - 15, tagW, 28), ink, 0x815e4b, .92, 4);
+        const tagY = slot < 2 ? bounds.y + bounds.h * .66 : bounds.y + bounds.h - 15;
+        box(scene, rect(bounds.x + (bounds.w - tagW) / 2, tagY, tagW, 28), ink, 0x815e4b, .92, 4);
         const count = shelf.goodId ? visibleStock(shelf.goodId) : 0;
         const caption = shelf.goodId ? `${nameOf(shelf.goodId)} · ${phase === 'open' ? `${count} left` : money(shelf.price)}` : displayName(slot);
         text(scene, caption, bounds.x + bounds.w / 2,
-          bounds.y + bounds.h - 1, { align: 'center', size: 11, max: tagW - 5 });
+          tagY + 14, { align: 'center', size: 11, max: tagW - 5 });
       });
     }
     if (phase === 'prepare' && state.buyingComplete) {
