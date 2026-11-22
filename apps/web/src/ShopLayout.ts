@@ -17,19 +17,22 @@ const isPortrait = (width: number, height: number) => width < 740 && width < hei
 export function roomLayout(width: number, height: number) {
   const portrait = isPortrait(width, height);
   const narrow = width < 660;
-  const bookBelowWall = portrait || (width < 1240 && height >= 660);
-  const bookHeight = bookBelowWall ? Math.max(376, height * .43) : Math.max(402, height * .49);
+  // Landscape books overlay the lower half; portrait mode reserves room above the book.
+  const overlayBook = !portrait && height >= 660;
+  const bookBelowWall = portrait || overlayBook;
+  const bookHeight = bookBelowWall ? height * .49 : Math.max(402, height * .49);
   const bookTop = height - bookHeight - 13;
-  const horizon = bookBelowWall ? bookTop - 8 : Math.round(height * .745);
+  const horizon = portrait ? bookTop - 8 : Math.round(height * .745);
   const wallTop = 63;
   const sidePageHeight = Math.min(505, bookHeight);
+  const pageMargin = portrait ? 0 : Math.min(48, width * .035);
   const page = bookBelowWall
-    ? { x: 0, y: bookTop, w: width, h: height - bookTop }
+    ? { x: pageMargin, y: bookTop, w: width - pageMargin * 2, h: height - bookTop }
     : { x: 15, y: Math.max(70, (height - sidePageHeight) / 2),
       w: Math.min(320, Math.max(280, width * .23)), h: sidePageHeight };
 
-  const sceneArea = bookBelowWall
-    ? { x: 0, y: 54, w: width, h: Math.max(260, horizon - 54) }
+  const sceneArea = portrait
+    ? { x: 0, y: 54, w: width, h: Math.max(1, horizon - 54) }
     : { x: 0, y: 0, w: width, h: height };
   const sceneScale = Math.min(sceneArea.w / 1448, sceneArea.h / 1086);
   const sceneWidth = 1448 * sceneScale;
@@ -48,19 +51,19 @@ export function roomLayout(width: number, height: number) {
   });
 
   const wallGap = Math.min(25, width * .036);
-  const doorAreaLeft = bookBelowWall ? Math.max(10, width * .035) : page.x + page.w + 12;
+  const doorAreaLeft = portrait || overlayBook ? Math.max(10, width * .035) : page.x + page.w + 12;
   const sideDoorRoom = Math.max(106, Math.min(250, width * .47 - doorAreaLeft - wallGap));
-  const windowX = bookBelowWall ? width * .365 : Math.max(width * .43, doorAreaLeft + wallGap + sideDoorRoom);
+  const windowX = portrait ? width * .365 : Math.max(width * .43, doorAreaLeft + wallGap + sideDoorRoom);
   const window = { x: windowX, y: wallTop, w: width * .98 - windowX, h: horizon - wallTop };
-  const bayX = bookBelowWall ? doorAreaLeft : doorAreaLeft - 5;
+  const bayX = portrait ? doorAreaLeft : doorAreaLeft - 5;
   const bay = { x: bayX, y: wallTop, w: window.x + window.w - bayX, h: window.h };
 
   const doorAreaRight = window.x - wallGap;
   const doorAreaWidth = doorAreaRight - doorAreaLeft;
   const doorCenter = doorAreaLeft + doorAreaWidth / 2;
-  const doorTop = Math.max(bookBelowWall ? 123 : 83, wallTop + doorAreaWidth * .38);
+  const doorTop = Math.max(portrait ? 123 : 83, wallTop + doorAreaWidth * .38);
   const doorHeight = Math.min(window.h * .83, horizon - doorTop, doorAreaWidth * 1.60);
-  const doorWidth = Math.min(doorAreaWidth * .94, doorHeight * .76, width * (bookBelowWall ? .28 : .20));
+  const doorWidth = Math.min(doorAreaWidth * .94, doorHeight * .76, width * (portrait ? .28 : .20));
   const door = { x: doorCenter - doorWidth / 2, y: horizon - doorHeight, w: doorWidth, h: doorHeight };
   const dialAboveDoor = (w: number): Bounds => {
     const h = w / dialAspect;
@@ -69,15 +72,15 @@ export function roomLayout(width: number, height: number) {
   const journalX = width < 710 ? 11 : 22;
   const journal = { x: journalX, y: 65, w: Math.min(155, window.x - journalX - 8), h: 44 };
   const compactDialWidth = Math.max(38, Math.min(104, door.w * .60));
-  const dialRoom = bookBelowWall ? (door.y - journal.y - journal.h + 4) * dialAspect : compactDialWidth;
+  const dialRoom = portrait ? (door.y - journal.y - journal.h + 4) * dialAspect : compactDialWidth;
   const dial = dialAboveDoor(Math.min(compactDialWidth, dialRoom));
   const travelDial = dialAboveDoor(Math.min(288, door.w * 1.65,
-    (doorCenter - (bookBelowWall ? 7 : page.x + page.w + 5)) * 2,
+    (doorCenter - (portrait ? 7 : overlayBook ? 7 : page.x + page.w + 5)) * 2,
     (window.x - doorCenter - 8) * 2, (door.y - wallTop + 4) * dialAspect));
   const shelfW = Math.min(width * (narrow ? .25 : .19), height * .29);
   const shelfH = portrait ? 46 : Math.min(105, height * .14);
   // Keep the aisle from the door to the counter clear at either aspect ratio.
-  const shelves = bookBelowWall
+  const shelves = portrait
     ? [
       { x: width * .045, y: horizon + 5, w: shelfW, h: shelfH },
       { x: width * .70, y: horizon + 12, w: shelfW, h: shelfH },
