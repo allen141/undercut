@@ -434,7 +434,7 @@ test('previews towns on the dial and confirms the destination', { tag: '@smoke' 
   const doorCenter = room.clip(room.layout.door, .5, 0, 0, 0).x;
   const confirm = (await action(page, 'Choose Meadow').boundingBox())!;
   const confirmCenter = confirm.x + confirm.width / 2;
-  const dialBounds = room.clip(travelDial, 0, 0, 1, 1);
+  const dialBounds = room.clip(room.layout.travelDial, 0, 0, 1, 1);
   expect(confirmCenter).toBeGreaterThanOrEqual(dialBounds.x);
   expect(confirmCenter).toBeLessThanOrEqual(dialBounds.x + dialBounds.width);
   const { bookBelowWall, window, door, horizon, page: reading, travelDial, shelves } = room.layout;
