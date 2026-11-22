@@ -28,8 +28,11 @@ export function Game(props: GameProps) {
   const [view, setView] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [business, setBusiness] = useState<BusinessPresentation | null>(null);
-  const [ledgerPage, setLedgerPage] = useState<LedgerPageId>(props.campaign.state.phase === 'report' ? 'performance' : 'inventory');
-  const [ledgerOpen, setLedgerOpen] = useState(props.campaign.state.phase === 'report');
+  const initialPage: LedgerPageId = props.campaign.state.phase === 'report' ? 'performance'
+    : props.campaign.state.phase === 'travel' ? 'markets'
+      : props.campaign.state.buyingComplete ? 'merchandising' : 'suppliers';
+  const [ledgerPage, setLedgerPage] = useState<LedgerPageId>(initialPage);
+  const [ledgerOpen, setLedgerOpen] = useState(props.campaign.state.phase !== 'open');
   const openLedger = useCallback((page: LedgerPageId = 'inventory') => {
     setLedgerPage(page);
     setLedgerOpen(true);
@@ -37,11 +40,12 @@ export function Game(props: GameProps) {
   const closeLedger = useCallback(() => setLedgerOpen(false), []);
 
   useEffect(() => {
-    if (props.campaign.state.phase === 'report') {
-      setLedgerPage('performance');
-      setLedgerOpen(true);
-    }
-  }, [props.campaign.state.phase, props.campaign.state.day]);
+    const { phase, buyingComplete } = props.campaign.state;
+    if (phase === 'report') setLedgerPage('performance');
+    else if (phase === 'travel') setLedgerPage('markets');
+    else if (phase === 'prepare') setLedgerPage(buyingComplete ? 'merchandising' : 'suppliers');
+    setLedgerOpen(phase !== 'open');
+  }, [props.campaign.state.phase, props.campaign.state.buyingComplete, props.campaign.state.day]);
 
   useEffect(() => {
     const element = viewport.current;
@@ -144,6 +148,7 @@ export function Game(props: GameProps) {
         <button onClick={props.back}>All campaigns</button>
       </>}
     </div>}
-    {ledgerOpen && <Ledger campaign={campaign} page={ledgerPage} setPage={setLedgerPage} close={closeLedger} />}
+    {ledgerOpen && <Ledger campaign={campaign} page={ledgerPage} setPage={setLedgerPage} close={closeLedger}
+      send={command => props.send(command)} busy={busy} online={online} />}
   </main>;
 }

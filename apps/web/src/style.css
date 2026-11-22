@@ -144,6 +144,14 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
 .ledger-paper p { margin-bottom: 8px; }
 .ledger-paper-kicker { color: #685644; }
 .ledger-paper-caption { display: block; margin-top: 15px; color: #685644; font: italic .86rem Georgia,serif; }
+.ledger-vendors { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,410px),1fr)); gap: 16px; }
+.ledger-vendor { padding: 16px; border: 1px solid #493b47; border-radius: 9px; background: #29232d; }
+.ledger-vendor header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ledger-vendor h3 { margin: 0 0 3px; color: #f0d7ad; }
+.ledger-vendor header span { color: #b4aab4; font-size: .8rem; }
+.ledger-vendor .ledger-table { margin-bottom: 0; }
+.ledger-vendor .ledger-table>div { grid-template-columns: minmax(0,1fr) minmax(105px,.7fr) auto; }
+.ledger-vendor .ledger-table button { padding: 6px 10px; min-height: 36px; }
 .ledger-book-footer { border-top: 1px solid #463541; border-bottom: 0; color: #9f929e; font-size: .75rem; }
 @media (max-width: 650px) {
   .ledger-backdrop { padding: 0; }

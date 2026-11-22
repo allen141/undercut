@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { GOODS, TOWNS, VENDORS, inventoryValue, quantity, type JournalEvent, type State } from '@undercut/game-core';
+import type { Command } from '@undercut/contracts';
 import type { Campaign } from './App.js';
 
-export type LedgerPageId = 'inventory' | 'performance' | 'markets' | 'events' | 'newspapers';
-type PageContext = { state: State };
+export type LedgerPageId = 'overview' | 'markets' | 'suppliers' | 'inventory' | 'merchandising' | 'performance' | 'gazette' | 'events' | 'newspapers';
+type PageContext = { state: State; send: (command: Command) => void; busy: boolean; online: boolean };
 type LedgerPage = { id: LedgerPageId; title: string; render: (context: PageContext) => ReactNode };
 const goodName = (id: string) => GOODS.find(good => good.id === id)?.name ?? id;
 const townName = (id: string) => TOWNS.find(town => town.id === id)?.name ?? id;
@@ -32,6 +33,16 @@ function digest(events: JournalEvent[], day: number, history: State['history']) 
 }
 
 const pages: LedgerPage[] = [
+  { id: 'overview', title: 'Overview', render: ({ state }) => <>
+    <p className="ledger-intro">Day {state.day} · {state.townId ? townName(state.townId) : 'Choose today’s market'} · {state.phase}</p>
+    <div className="ledger-metrics">
+      <div><span>Available gold</span><strong>{money(state.gold)}</strong></div>
+      <div><span>Inventory at cost</span><strong>{money(inventoryValue(state))}</strong></div>
+      <div><span>Sales today</span><strong>{money(state.revenue)}</strong></div>
+      <div><span>Trading profit</span><strong>{money(state.revenue - state.costOfSales)}</strong></div>
+    </div>
+    <p className="ledger-intro">Use the sections to compare markets, visit suppliers, prepare displays, and review your trading record.</p>
+  </> },
   { id: 'inventory', title: 'Inventory', render: ({ state }) => <>
     <p className="ledger-intro">Goods carried between days, valued at their purchase cost.</p>
     <div className="ledger-table" role="table" aria-label="Current inventory">
@@ -68,6 +79,40 @@ const pages: LedgerPage[] = [
     </>;
   } },
   { id: 'markets', title: 'Locations & prices', render: ({ state }) => <MarketHistory events={state.journal ?? []} /> },
+  { id: 'suppliers', title: 'Suppliers', render: ({ state, send, busy, online }) => <>
+    <p className="ledger-intro">Compare this town’s current offers before using one of your two vendor visits.</p>
+    <p>Visits used: {state.visitedVendorIds.length} of 2</p>
+    <div className="ledger-vendors">{VENDORS.filter(vendor => (state.vendorOffers[vendor.id] ?? []).length).map(vendor => {
+      const active = state.activeVendorId === vendor.id;
+      const visited = state.visitedVendorIds.includes(vendor.id);
+      return <article className="ledger-vendor" key={vendor.id}>
+        <header><div><h3>{vendor.name}</h3><span>{state.vendorReputation[vendor.id]?.tier ?? 0} reputation tier</span></div>
+          {!active && <button disabled={busy || !online || state.phase !== 'prepare' || state.buyingComplete || visited || state.visitedVendorIds.length >= 2 || !!state.activeVendorId}
+            onClick={() => send({ type: 'visitVendor', vendorId: vendor.id })}>{visited ? 'Visited' : 'Begin visit'}</button>}
+          {active && <button disabled={busy || !online} onClick={() => send({ type: 'leaveVendor' })}>End visit</button>}
+        </header>
+        <div className="ledger-table" role="table" aria-label={`${vendor.name} offers`}>
+          <div role="row" className="ledger-table-head"><span role="columnheader">Offer</span><span role="columnheader">Price · stock</span><span role="columnheader">Buy</span></div>
+          {(state.vendorOffers[vendor.id] ?? []).map(offer => <div role="row" key={offer.id}>
+            <span role="cell">{goodName(offer.goodId)}{offer.requiredTier ? ` · Tier ${offer.requiredTier}` : ''}</span>
+            <span role="cell">{money(offer.unitCost)} · {offer.quantity}</span>
+            <span role="cell"><button disabled={!active || busy || !online || offer.quantity < 1 || state.gold < offer.unitCost}
+              onClick={() => send({ type: 'buy', offerId: offer.id, quantity: 1 })}>Buy 1</button></span>
+          </div>)}
+        </div>
+      </article>;
+    })}</div>
+    {state.phase === 'prepare' && !state.buyingComplete && <button className="primary" disabled={busy || !online}
+      onClick={() => send({ type: 'finishBuying' })}>Finish buying and prepare displays</button>}
+  </> },
+  { id: 'merchandising', title: 'Merchandising', render: ({ state }) => <>
+    <p className="ledger-intro">Set the four displays from available stock. Current listed prices and assignments are shown here.</p>
+    <div className="ledger-table" role="table" aria-label="Shop displays">
+      <div role="row" className="ledger-table-head"><span role="columnheader">Display</span><span role="columnheader">Good</span><span role="columnheader">Listed price</span></div>
+      {state.shelves.map((shelf, slot) => <div role="row" key={slot}><span role="cell">{slot === 3 ? 'Window' : `Floor ${slot + 1}`}</span><span role="cell">{shelf.goodId ? goodName(shelf.goodId) : 'Empty'}</span><span role="cell">{shelf.goodId ? money(shelf.price) : '—'}</span></div>)}
+    </div>
+    <p>Assignments are edited from the shop display controls during preparation.</p>
+  </> },
   { id: 'events', title: 'Events', render: ({ state }) => {
     const events = state.journal ?? [];
     if (!events.length) return <p className="ledger-empty">Campaign activity will appear here as you trade.</p>;
@@ -75,7 +120,7 @@ const pages: LedgerPage[] = [
       <span>Day {event.day}</span><strong>{describeEvent(event)}</strong>
     </li>)}</ol>;
   } },
-  { id: 'newspapers', title: 'Newspapers', render: ({ state }) => {
+  { id: 'gazette', title: 'Gazette', render: ({ state }) => {
     const events = state.journal ?? [];
     const days = [...new Set(state.history.map(result => result.day))].reverse();
     if (!days.length) return <p className="ledger-empty">The first edition is published after your first completed day.</p>;
@@ -145,8 +190,9 @@ function MarketHistory({ events }: { events: JournalEvent[] }) {
   </>;
 }
 
-export function Ledger({ campaign, page, setPage, close }: {
+export function Ledger({ campaign, page, setPage, close, send, busy, online }: {
   campaign: Campaign; page: LedgerPageId; setPage: (page: LedgerPageId) => void; close: () => void;
+  send: (command: Command) => void; busy: boolean; online: boolean;
 }) {
   const dialog = useRef<HTMLElement>(null);
   const selected = useMemo(() => pages.find(candidate => candidate.id === page) ?? pages[0], [page]);
@@ -179,7 +225,7 @@ export function Ledger({ campaign, page, setPage, close }: {
         {pages.map(item => <button type="button" key={item.id} className={page === item.id ? 'active' : ''}
           aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}>{item.title}</button>)}
       </nav>
-      <div className="ledger-content" key={page}><h2>{selected.title}</h2>{selected.render({ state: campaign.state })}</div>
+      <div className="ledger-content" key={page}><h2>{selected.title}</h2>{selected.render({ state: campaign.state, send, busy, online })}</div>
       <footer className="ledger-book-footer"><span>Campaign record · Revision {campaign.revision}</span><button type="button" onClick={close}>Continue trading</button></footer>
     </section>
   </div>;
