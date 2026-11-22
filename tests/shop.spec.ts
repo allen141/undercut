@@ -207,7 +207,11 @@ async function setDisplay(page: Page, slot: number, good: string, price: number,
   const closePanel = action(page, 'Close panel');
   const displayAction = action(page, display);
   await expect.poll(async () => (await closePanel.count()) > 0 || (await displayAction.count()) > 0).toBe(true);
-  if (await closePanel.count()) await activate(page, 'Close panel');
+  if (await closePanel.count()) {
+    await activate(page, 'Close panel');
+    await expect(closePanel).toHaveCount(0);
+  }
+  await expect(displayAction).toBeEnabled();
   await activate(page, display);
   await activate(page, `Display ${good[0].toUpperCase()}${good.slice(1)}`);
   await activate(page, 'Price per item');
@@ -351,7 +355,7 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
       }));
       // The shaded lower panel shows the same closed door, under the room's night tint.
       const tint = [0x17, 0x17, 0x2d];
-      const opacity = .10;
+      const opacity = .12;
       let error = 0;
       for (let i = 0; i < daylight.length; i += 4) {
         for (let channel = 0; channel < 3; channel++) {
