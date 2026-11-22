@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const softwareWebGL = { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] };
+const firefoxSoftwareWebGL = { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false, 'webgl.disable-fail-if-major-performance-caveat': true } };
 
 export default defineConfig({
   testDir: './tests',
@@ -12,12 +13,12 @@ export default defineConfig({
     baseURL: process.env.BASE_URL ?? 'http://localhost:5180',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
-    // Use the real reduced-motion mode so software WebGL does not redraw decorative animation throughout every assertion.
+    // Use reduced motion to keep the rendered scene still during the startup check.
     contextOptions: { reducedMotion: 'reduce' },
   },
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 960 }, launchOptions: softwareWebGL } },
-    { name: 'desktop-firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1366, height: 900 } } },
+    { name: 'desktop-firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1366, height: 900 }, launchOptions: firefoxSoftwareWebGL } },
     { name: 'mobile-chromium', use: { ...devices['Pixel 7'], launchOptions: softwareWebGL } },
     { name: 'mobile-webkit', use: { ...devices['iPhone 13'] } },
   ],
