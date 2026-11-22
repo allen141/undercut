@@ -1,7 +1,5 @@
 export type Bounds = { x: number; y: number; w: number; h: number };
 
-const dialAspect = 317 / 155;
-
 export function shopScale(width: number, height: number, pageScale = 1) {
   // Mobile desktop mode can fit a wide CSS viewport into a narrower display.
   // At larger zoom levels, keep fitting the visible area so the controls stay in reach.
@@ -23,7 +21,6 @@ export function roomLayout(width: number, height: number) {
   const bookHeight = bookBelowWall ? height * .49 : Math.max(402, height * .49);
   const bookTop = height - bookHeight - 13;
   const layoutHorizon = portrait ? bookTop - 8 : Math.round(height * .745);
-  const wallTop = 63;
   const sidePageHeight = Math.min(505, bookHeight);
   const pageMargin = portrait ? 0 : Math.min(48, width * .035);
   const page = bookBelowWall
@@ -56,19 +53,8 @@ export function roomLayout(width: number, height: number) {
   const window = sceneWindow;
   const horizon = window.y + window.h;
   const bay = { x: window.x, y: Math.min(window.y, door.y), w: door.x - window.x, h: Math.max(window.h, door.h) };
-  const doorCenter = door.x + door.w / 2;
-  const dialAboveDoor = (w: number): Bounds => {
-    const h = w / dialAspect;
-    const x = Math.max(7, Math.min(width - w - 7, doorCenter - w / 2));
-    return { x, y: door.y - h + 4, w, h };
-  };
   const journalX = width < 710 ? 11 : 22;
   const journal = { x: journalX, y: 65, w: Math.min(155, window.x - journalX - 8), h: 44 };
-  const compactDialWidth = Math.max(38, Math.min(104, door.w * .60));
-  const dialRoom = portrait ? (door.y - journal.y - journal.h + 4) * dialAspect : compactDialWidth;
-  const dial = dialAboveDoor(Math.min(compactDialWidth, dialRoom));
-  const travelDial = dialAboveDoor(Math.min(288, door.w * 1.65,
-    Math.max(38, (door.y - wallTop + 4) * dialAspect)));
   const shelfW = Math.min(width * (narrow ? .25 : .19), height * .29);
   const shelfH = portrait ? 46 : Math.min(105, height * .14);
   // Keep the aisle from the door to the counter clear at either aspect ratio.
@@ -91,8 +77,6 @@ export function roomLayout(width: number, height: number) {
   const counterW = width * (narrow ? .90 : .86);
   const counter = { x: (width - counterW) / 2, y: height * .835, w: counterW, h: height * .165 };
   const bell = { x: counter.x + counter.w * .70, y: counter.y - 32, w: 48, h: 49 };
-  const bookW = Math.max(104, Math.min(196, counterW * (narrow ? .45 : .54)));
-  const book = { x: counter.x + counter.w * (narrow ? .11 : .44), y: counter.y - 39, w: bookW, h: 63 };
   const visitorH = portrait ? 100 : Math.min(225, height * .24);
   const visitorW = Math.min(visitorH * .90, width * .24);
   const visitor = { x: width * (portrait ? .12 : .34), y: counter.y - visitorH + 6, w: visitorW, h: visitorH };
@@ -104,10 +88,11 @@ export function roomLayout(width: number, height: number) {
     mapScene([660, 365, 440, 100]),
   ];
   const sceneCounter = mapScene([628, 351, 568, 250]);
+  const book = mapScene([674, 380, 156, 82]);
   const sceneBell = mapScene([1090, 305, 75, 124]);
   const sceneVisitor = mapScene([545, 348, 320, 320]);
   return {
     portrait, narrow, bookBelowWall, scene, sceneDoor, sceneWindow, sceneShelves, sceneCounter, sceneBell, sceneVisitor,
-    door, window, dial, travelDial, journal, bay, shelves, counter, bell, book, visitor, horizon, page,
+    door, window, journal, bay, shelves, counter, bell, book, visitor, horizon, page,
   };
 }

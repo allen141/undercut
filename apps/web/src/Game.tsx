@@ -109,7 +109,7 @@ export function Game(props: GameProps) {
     busy ? 'Saving…' : pending ? 'An action needs confirmation.' :
     business?.announcement ?? (offer && good ? `Customer ${state.served + 1} offers ${offer.offer}g for ${good.name}, listed at ${offer.shelfPrice}g.` :
     state.phase === 'open' ? `${state.served} of ${CUSTOMERS_PER_DAY} customer visits. ${state.log.at(-1) ?? 'The shop is open.'}` :
-    state.phase === 'report' ? `Day ${state.day} closed. Review the accounts book.` :
+    state.phase === 'report' ? `Day ${state.day} closed. Review the ledger.` :
     `Day ${state.day}. ${state.gold} gold. Progress saved.`));
 
   return <main ref={viewport} className="canvas-game" aria-label={campaign.name} aria-busy={busy} data-revision={campaign.revision}>

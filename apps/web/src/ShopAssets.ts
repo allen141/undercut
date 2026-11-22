@@ -24,7 +24,7 @@ type HarborManifest = {
 const harborManifest = harborSceneData as unknown as HarborManifest;
 
 const names = [
-  'room-wall', 'room-floor', 'room-floor-portrait', 'door-open', 'door-closed', 'window-frame-tall', 'destination-dial',
+  'room-wall', 'room-floor', 'room-floor-portrait', 'door-open', 'door-closed', 'window-frame-tall',
   'town-meadow', 'town-forge', 'town-harbor', 'shelf-empty',
   'counter', 'ledger', 'bell', 'wholesale-crate', 'lantern', 'plant-hanging',
   'good-grain', 'good-herbs', 'good-cloth', 'good-tea', 'good-iron', 'good-crystal',

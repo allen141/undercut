@@ -94,6 +94,9 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   let backingWidth = 0, backingHeight = 0;
   let disposed = false;
   let frame = 0;
+  let deskBookFrame = 0;
+  let deskBook: Sprite | undefined;
+  let deskBookY = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let attemptedRevision: number | undefined;
   let transition: { start: number; kind: 'open' | 'turn'; from: Rect } | undefined;
@@ -187,6 +190,22 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       frame = requestAnimationFrame(drawMotion);
     } else transition = undefined;
     app.render();
+  }
+
+  function animateDeskBook(now: number) {
+    deskBookFrame = 0;
+    if (disposed || !deskBook || panel || props().campaign.state.phase === 'open' ||
+      reducedMotion.matches || document.hidden) return;
+    deskBook.position.y = deskBookY + Math.sin(now / 780) * 1.8;
+    deskBook.rotation = Math.sin(now / 1050) * .025;
+    app.render();
+    deskBookFrame = requestAnimationFrame(animateDeskBook);
+  }
+
+  function startDeskBookAnimation() {
+    if (deskBookFrame || !deskBook || panel || props().campaign.state.phase === 'open' ||
+      reducedMotion.matches || document.hidden) return;
+    deskBookFrame = requestAnimationFrame(animateDeskBook);
   }
 
   function show(next: Panel, origin: string, initialFocus = 'dismiss') {
@@ -435,29 +454,24 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       layer.addChild(item);
     }
 
-    const townId = phase === 'travel' ? preview.id : undefined;
     const artShelf = panel === 'shelf' || panel === 'price' ? selectedShelf : undefined;
     const displayState = state.shelves.map(shelf => [shelf.goodId, shelf.goodId ? Math.min(5, visibleStock(shelf.goodId)) : 0]);
-    const key = JSON.stringify([w, h, phase, townId ?? state.townId, artShelf, displayState]);
+    const key = JSON.stringify([w, h, phase, state.townId, artShelf, displayState]);
     if (key !== artKey) {
       art.removeChildren().forEach(child => child.destroy({ children: true }));
       foreground.removeChildren().forEach(child => child.destroy({ children: true }));
-      drawRoom(art, foreground, textures, w, h, { ...state, phase }, { townId, selectedShelf: artShelf, stock: visibleStock });
+      drawRoom(art, foreground, textures, w, h, { ...state, phase }, { selectedShelf: artShelf, stock: visibleStock });
       artKey = key;
     }
 
-    box(scene, rect(margin, 10, w - 2 * margin, 48), ink, 0x946c50, .94);
     const navW = narrow ? 59 : 131;
     control(scene, 'back', 'All campaigns', rect(margin + 3, 12, navW, 44), p.back,
       { copy: narrow ? '‹ Menu' : '‹ All campaigns', disabled: p.busy || !p.online });
     if (phase !== 'open') control(scene, 'stock', 'Inventory and gold', rect(w - margin - (narrow ? 67 : 114), 12, narrow ? 64 : 111, 44),
       () => { if (p.openLedger) p.openLedger('inventory'); else show('stock', 'stock'); }, { copy: money(cash) });
-    const location = phase === 'travel' ? `${preview.name} preview` : town?.name ?? 'Between towns';
-    text(scene, narrow ? `Day ${state.day} · ${location}` : `${p.campaign.name.slice(0, 36)}  /  Day ${state.day} · ${location}`,
-      w / 2, 34, { align: 'center', max: w - (narrow ? 155 : 308), serif: !narrow, size: narrow ? 13 : 17 });
 
     const ledgerPage = phase === 'travel' ? 'markets' : phase === 'report' ? 'performance'
-      : state.buyingComplete ? 'merchandising' : 'suppliers';
+      : phase === 'open' ? 'activity' : state.buyingComplete ? 'merchandising' : 'suppliers';
     const ledgerTitle = phase === 'travel' ? 'Markets' : phase === 'report' ? 'Performance'
       : state.buyingComplete ? 'Merchandising' : 'Suppliers';
     function openBook() {
@@ -466,14 +480,19 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     }
 
     const bookName = `Open ${ledgerTitle}`;
-    if (phase !== 'open') control(scene, 'book', bookName, layout.book, openBook, { hide: true });
-    if (!modal && phase !== 'open') {
-      const { x, y, w: width, h: height } = layout.book;
-      const nameplate = skin(textures['button-primary'], rect(x, y + height - 24, width, 29), 21, 12);
-      scene.addChild(nameplate);
-      text(scene, phaseBooks[phase].title, x + width / 2, y + height - 10,
-        { serif: true, size: narrow ? 13 : 16, align: 'center', max: width - 12 });
-    }
+    deskBook = undefined;
+    const { x, y, w: bookWidth, h: bookHeight } = layout.book;
+    const ledger = placeSprite(textures.ledger, layout.book);
+    ledger.anchor.set(.5);
+    ledger.position.set(x + bookWidth / 2, y + bookHeight / 2);
+    ledger.eventMode = 'static';
+    ledger.cursor = 'pointer';
+    ledger.hitArea = new Rectangle(-bookWidth / 2, -bookHeight / 2, bookWidth, bookHeight);
+    ledger.on('pointertap', openBook);
+    deskBook = ledger;
+    deskBookY = ledger.position.y;
+    scene.addChild(ledger);
+    control(scene, 'book', bookName, layout.book, openBook, { hide: true });
     if (phase === 'prepare' && state.buyingComplete || phase === 'open') {
       layout.sceneShelves.forEach((bounds, slot) => {
         const shelf = state.shelves[slot];
@@ -553,15 +572,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     }
 
     const tip = !p.online ? 'You’re offline. Reconnect to continue trading.' : p.error || (
-      p.busy ? 'Saving…' : p.pending ? 'Confirm your last action.' :
-      phase === 'travel' ? 'Pick a town on the dial. Press its center to travel.' :
-      phase === 'prepare' ? state.buyingComplete ? 'Set up your displays and open the shop.' : 'Open the supplier ledger to compare vendors.' :
-      phase === 'open' ? latestOutcome?.line ?? state.log[served - 1] ?? 'The shop is open. Customers are on their way.' :
-      'The shop is closed. Review your accounts when ready.');
-    if (!modal || !layout.bookBelowWall) {
-      box(scene, rect(margin, h - 43, w - margin * 2, 35), ink, 0x76574b, .94);
-      text(scene, tip, w / 2, h - 25, { align: 'center', max: w - margin * 2 - 14, size: narrow ? 11 : 13, color: p.error ? 0xffbcb0 : muted });
-    }
+      p.busy ? 'Saving…' : p.pending ? 'Confirm your last action.' : '');
     if (!modal && p.pending && p.online && !p.busy) {
       control(scene, 'retry', 'Confirm last action', rect(w / 2 - 88, h - 102, 176, 44), () => p.send(), { primary: true });
     }
@@ -803,7 +814,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         const period = days.length === 1 ? `Day ${days[0]}` : `Days ${days[0]}–${days.at(-1)}`;
         note(`${period} · Solid town avg · Dashed global avg`, legendY);
         note('— No local regular price', legendY + 18);
-        note('Pick a town on the dial. Press its center to travel.', legendY + 41);
+        note('Choose a destination from Markets in the ledger.', legendY + 41);
       }
 
       if (panel === 'book' && phase === 'prepare' && !state.buyingComplete) {
@@ -1097,6 +1108,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     }
     paintFocus();
     paintVisit(performance.now());
+    startDeskBookAnimation();
     if ((playback || offerArrival !== undefined) && !visitFrame && !reducedMotion.matches && !document.hidden) {
       visitFrame = requestAnimationFrame(animateVisit);
     }
@@ -1198,7 +1210,10 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       render();
       scheduleVisit();
     }
-    if (!document.hidden) scheduleService();
+    if (!document.hidden) {
+      render();
+      scheduleService();
+    }
   }
 
   function update() {
@@ -1331,6 +1346,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       observer.disconnect();
       visualViewport?.removeEventListener('resize', resize);
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(deskBookFrame);
       cancelAnimationFrame(visitFrame);
       clearTimeout(timer);
       clearTimeout(animationClock);
