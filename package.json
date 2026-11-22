@@ -14,7 +14,7 @@
     "test": "tsx --test packages/game-core/src/*.test.ts",
     "test:integration": "tsx --test apps/api/tests/*.test.ts",
     "test:browser": "playwright test",
-    "test:browser:smoke": "playwright test --project=mobile-chromium --grep @smoke",
+    "test:browser:smoke": "playwright test --grep @smoke",
     "db:migrate": "tsx apps/api/src/migrate.ts",
     "operator": "tsx apps/api/src/operator.ts"
   },
