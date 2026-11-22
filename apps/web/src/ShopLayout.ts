@@ -85,10 +85,10 @@ export function roomLayout(width: number, height: number) {
     mapScene([115, 177, 235, 114]),
     mapScene([115, 278, 235, 132]),
     mapScene([640, 610, 380, 105]),
-    mapScene([430, 205, 635, 78]),
+    mapScene([430, 260, 635, 82]),
   ];
   const sceneCounter = mapScene([628, 351, 568, 250]);
-  const book = mapScene([674, 360, 156, 82]);
+  const book = mapScene([674, 320, 156, 82]);
   const sceneBell = mapScene([1090, 305, 75, 124]);
   const sceneVisitor = mapScene([545, 348, 320, 320]);
   return {
