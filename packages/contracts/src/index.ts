@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const negotiationOutcomeSchema = z.enum(['acceptOffer', 'holdPrice', 'decline']);
+export const pricePresetSchema = z.union([z.literal(80), z.literal(100), z.literal(120)]);
 
 export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('chooseTown'), townId: z.string().max(40) }),
@@ -14,6 +15,15 @@ export const commandSchema = z.discriminatedUnion('type', [
     goodId: z.string().max(40).nullable(),
     price: z.number().int().min(1).max(10000),
   }),
+  z.object({
+    type: z.literal('configureDisplays'),
+    displays: z.array(z.object({
+      slot: z.number().int().min(0).max(3),
+      goodId: z.string().max(40).nullable(),
+      pricePreset: pricePresetSchema,
+    })).length(4),
+  }),
+  z.object({ type: z.literal('restockDisplay'), slot: z.number().int().min(0).max(3) }),
   z.object({ type: z.literal('open') }),
   z.object({ type: z.literal('serve') }),
   z.object({ type: z.literal('negotiate'), outcome: negotiationOutcomeSchema }),

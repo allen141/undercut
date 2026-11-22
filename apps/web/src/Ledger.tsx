@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { GOODS, TOWNS, VENDORS, inventoryValue, quantity, type JournalEvent, type State } from '@undercut/game-core';
+import { DISPLAY_CAPACITY, GOODS, TOWNS, VENDORS, inventoryValue, priceForPreset, priceRange, quantity, type GoodId, type JournalEvent, type PricePreset, type State } from '@undercut/game-core';
 import type { Command } from '@undercut/contracts';
 import type { Campaign } from './App.js';
 
@@ -105,14 +105,7 @@ const pages: LedgerPage[] = [
     {state.phase === 'prepare' && !state.buyingComplete && <button className="primary" disabled={busy || !online}
       onClick={() => send({ type: 'finishBuying' })}>Finish buying and prepare displays</button>}
   </> },
-  { id: 'merchandising', title: 'Merchandising', render: ({ state }) => <>
-    <p className="ledger-intro">Set the four displays from available stock. Current listed prices and assignments are shown here.</p>
-    <div className="ledger-table" role="table" aria-label="Shop displays">
-      <div role="row" className="ledger-table-head"><span role="columnheader">Display</span><span role="columnheader">Good</span><span role="columnheader">Listed price</span></div>
-      {state.shelves.map((shelf, slot) => <div role="row" key={slot}><span role="cell">{slot === 3 ? 'Window' : `Floor ${slot + 1}`}</span><span role="cell">{shelf.goodId ? goodName(shelf.goodId) : 'Empty'}</span><span role="cell">{shelf.goodId ? money(shelf.price) : '—'}</span></div>)}
-    </div>
-    <p>Assignments are edited from the shop display controls during preparation.</p>
-  </> },
+  { id: 'merchandising', title: 'Merchandising', render: context => <MerchandisingPage {...context} /> },
   { id: 'events', title: 'Events', render: ({ state }) => {
     const events = state.journal ?? [];
     if (!events.length) return <p className="ledger-empty">Campaign activity will appear here as you trade.</p>;
@@ -137,6 +130,43 @@ const pages: LedgerPage[] = [
   } },
 ];
 
+function MerchandisingPage({ state, send, busy, online }: PageContext) {
+  const [goods, setGoods] = useState<(string | null)[]>(state.shelves.map(shelf => shelf.goodId));
+  const [presets, setPresets] = useState<PricePreset[]>(state.pricePresets ?? [100, 100, 100, 100]);
+  const townId = state.townId;
+  const choices = GOODS.filter(good => quantity(state, good.id) > 0);
+  return <>
+    <p className="ledger-intro">Assign up to four different goods. The baseline is the midpoint of this town’s estimated buyer range.</p>
+    <div className="ledger-display-grid">{state.shelves.map((shelf, slot) => {
+      const goodId = goods[slot];
+      const price = goodId && townId ? priceForPreset(townId, goodId as GoodId, presets[slot]) : null;
+      const displayed = state.displayStock?.[slot] ?? 0;
+      const reserve = goodId ? Math.max(0, quantity(state, goodId) - displayed) : 0;
+      const range = goodId && townId ? priceRange(TOWNS.find(item => item.id === townId)!, goodId as GoodId) : null;
+      return <article className="ledger-display" key={slot}>
+        <h3>{slot === 3 ? 'Window display' : `Floor display ${slot + 1}`}</h3>
+        {state.phase === 'prepare' && <>
+          <label>Good<select value={goodId ?? ''} disabled={busy || !online} onChange={event => setGoods(current => current.map((value, index) => index === slot ? event.target.value || null : value))}>
+            <option value="">Empty</option>{choices.map(good => <option key={good.id} value={good.id} disabled={goods.some((value, index) => index !== slot && value === good.id)}>{good.name} · {quantity(state, good.id)} in stock</option>)}
+          </select></label>
+          {goodId && <fieldset className="price-presets"><legend>Daily price</legend>{([80, 100, 120] as const).map(preset => <label key={preset}><input type="radio" name={`preset-${slot}`} checked={presets[slot] === preset} onChange={() => setPresets(current => current.map((value, index) => index === slot ? preset : value))} />{preset}%</label>)}</fieldset>}
+          {price !== null && <p className="display-price">{money(price)} <span>Budget estimate {range?.min}–{range?.max}g</span></p>}
+        </>}
+        {state.phase !== 'prepare' && <p>{shelf.goodId ? goodName(shelf.goodId) : 'Empty'} · {shelf.goodId ? money(shelf.price) : '—'}</p>}
+        {state.phase === 'open' && shelf.goodId && <>
+          <p>Displayed {displayed}/{DISPLAY_CAPACITY} · Reserve {reserve}</p>
+          <button disabled={busy || !online || reserve < 1 || displayed >= DISPLAY_CAPACITY || !!state.pendingNegotiation}
+            onClick={() => send({ type: 'restockDisplay', slot })}>Refill display</button>
+        </>}
+      </article>;
+    })}</div>
+    {state.phase === 'prepare' && <button className="primary" disabled={busy || !online || !state.buyingComplete || !townId}
+      onClick={() => send({ type: 'configureDisplays', displays: goods.map((goodId, slot) => ({ slot, goodId, pricePreset: presets[slot] })) })}>
+      Save all displays
+    </button>}
+  </>;
+}
+
 function describeEvent(event: JournalEvent) {
   switch (event.type) {
     case 'townChosen': return `Travelled to ${townName(event.townId)}`;
@@ -145,6 +175,7 @@ function describeEvent(event: JournalEvent) {
     case 'buyingFinished': return 'Finished buying stock';
     case 'stockBought': return `Bought ${event.quantity} ${goodName(event.goodId)} from ${vendorName(event.vendorId)} for ${money(event.total)}`;
     case 'shelfSet': return event.goodId ? `Set shelf ${event.slot + 1}: ${goodName(event.goodId)} at ${money(event.price)}` : `Cleared shelf ${event.slot + 1}`;
+    case 'displayRestocked': return `Refilled display ${event.slot + 1} with ${event.quantity} ${goodName(event.goodId)}`;
     case 'shopOpened': return 'Opened the shop';
     case 'customerServed': return ['sold', 'offerAccepted', 'priceHeld'].includes(event.outcome)
       ? `Sold ${goodName(event.goodId)} for ${money(event.price ?? 0)}`

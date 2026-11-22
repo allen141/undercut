@@ -17,6 +17,8 @@ export const RULES_VERSION = 1;
 export const FLOOR_SHELF_COUNT = 3;
 export const WINDOW_SLOT_INDEX = FLOOR_SHELF_COUNT;
 export const CUSTOMERS_PER_DAY = 8;
+export const DISPLAY_CAPACITY = 3;
+export type PricePreset = 80 | 100 | 120;
 const DISPLAY_COUNT = FLOOR_SHELF_COUNT + 1;
 const STANDOUT_COUNT_WEIGHTS = [1, 2, 1] as const;
 const STANDOUT_COUNTS = STANDOUT_COUNT_WEIGHTS.flatMap((weight, count) => Array<number>(weight).fill(count));
@@ -61,6 +63,7 @@ export type JournalEvent =
   | { day: number; type: 'buyingFinished' }
   | { day: number; type: 'stockBought'; goodId: GoodId; vendorId: string; quantity: number; unitCost: number; total: number }
   | { day: number; type: 'shelfSet'; slot: number; goodId: GoodId | null; price: number }
+  | { day: number; type: 'displayRestocked'; slot: number; goodId: GoodId; quantity: number }
   | { day: number; type: 'shopOpened'; shelves: { slot: number; goodId: GoodId | null; price: number }[] }
   | { day: number; type: 'customerServed'; customer: number; goodId: GoodId; outcome: CustomerResult['result']; price: number | null; budget: number }
   | { day: number; type: 'dayClosed'; result: DailyResult };
@@ -95,6 +98,10 @@ type ShopLoopState = {
   purchasesByVendor: Record<string, VendorPurchases>;
   negotiations: NegotiationResult[];
   customerResults: CustomerResult[];
+  /** Optional so older campaign snapshots preserve their original display semantics. */
+  displayStock?: number[];
+  pricePresets?: PricePreset[];
+  businessMode?: boolean;
 };
 export type State = LegacyState & ShopLoopState;
 
@@ -136,6 +143,9 @@ export function newGame(seed: number): State {
     purchasesByVendor: {},
     negotiations: [],
     customerResults: [],
+    displayStock: Array.from({ length: DISPLAY_COUNT }, () => 0),
+    pricePresets: Array.from({ length: DISPLAY_COUNT }, () => 100),
+    businessMode: false,
   };
 }
 
@@ -171,7 +181,17 @@ export function upgradeState(previous: LegacyState | State): State {
     purchasesByVendor: hasCurrentMarket ? saved.purchasesByVendor ?? {} : {},
     negotiations: hasCurrentMarket ? saved.negotiations ?? [] : [],
     customerResults: hasCurrentMarket ? saved.customerResults ?? [] : [],
+    displayStock: saved.displayStock?.length === DISPLAY_COUNT ? saved.displayStock : undefined,
+    pricePresets: saved.pricePresets?.length === DISPLAY_COUNT ? saved.pricePresets : Array.from({ length: DISPLAY_COUNT }, () => 100),
+    businessMode: saved.businessMode === true,
   };
+}
+
+export function priceForPreset(townId: string, goodId: GoodId, preset: PricePreset) {
+  const town = TOWNS.find(candidate => candidate.id === townId);
+  requireRule(town, 'Choose a town before pricing displays.');
+  const range = priceRange(town, goodId);
+  return Math.max(1, Math.min(10000, Math.round(((range.min + range.max) / 2) * preset / 100)));
 }
 
 export function quantity(state: LegacyState, goodId: string) {
@@ -203,7 +223,7 @@ function createCustomers(state: State, town: Town): Customer[] {
   return customers;
 }
 
-function recordSale(state: State, goodId: GoodId, price: number) {
+function recordSale(state: State, goodId: GoodId, price: number, slot?: number) {
   const lots = state.inventory[goodId];
   const lot = lots[0];
   state.costOfSales += lot.unitCost;
@@ -212,6 +232,7 @@ function recordSale(state: State, goodId: GoodId, price: number) {
   state.gold += price;
   state.revenue += price;
   state.sold++;
+  if (slot !== undefined && state.displayStock) state.displayStock[slot] = Math.max(0, state.displayStock[slot] - 1);
 }
 
 function closeDay(state: State) {
@@ -243,7 +264,9 @@ function advanceBusiness(state: State) {
     if (!shelf) {
       result = 'notDisplayed';
       message = `Wanted ${good.name}: not displayed.`;
-    } else if (quantity(state, customer.goodId) === 0) {
+    } else if (state.displayStock && state.displayStock.length === DISPLAY_COUNT
+      ? state.displayStock[state.shelves.indexOf(shelf)] === 0
+      : quantity(state, customer.goodId) === 0) {
       result = 'soldOut';
       message = `Wanted ${good.name}: sold out.`;
     } else if (customer.bargainDiscount && shelf.price > 1) {
@@ -258,7 +281,7 @@ function advanceBusiness(state: State) {
       result = 'overBudget';
       message = `Declined ${good.name} at ${shelf.price}g: budget was ${customer.budget}g.`;
     } else {
-      recordSale(state, customer.goodId, shelf.price);
+      recordSale(state, customer.goodId, shelf.price, state.shelves.indexOf(shelf));
       result = 'sold';
       price = shelf.price;
       message = `Bought ${good.name} for ${shelf.price}g.`;
@@ -266,6 +289,10 @@ function advanceBusiness(state: State) {
     state.log.push(message);
     state.customerResults.push({ customerIndex: state.served, goodId: customer.goodId, result, price });
     state.served++;
+    if (state.businessMode) {
+      if (state.served === state.customers.length) closeDay(state);
+      return;
+    }
   }
 
   closeDay(state);
@@ -275,6 +302,7 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
   const prior = upgradeState(previous);
   const state = structuredClone(prior);
   state.journal ??= [];
+  let restockedQuantity = 0;
   const town = TOWNS.find((candidate) => candidate.id === state.townId);
 
   switch (command.type) {
@@ -285,6 +313,10 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
       state.phase = 'prepare';
       state.marketDay = state.day;
       state.vendorOffers = vendorOffersForTown(state, state.townId);
+      state.pricePresets = Array.from({ length: DISPLAY_COUNT }, () => 100);
+      state.shelves = state.shelves.map(shelf => shelf.goodId && quantity(state, shelf.goodId) > 0
+        ? { ...shelf, price: priceForPreset(state.townId!, shelf.goodId, 100) }
+        : emptyShelf());
       break;
     }
 
@@ -358,12 +390,51 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
         'This good is already displayed.',
       );
       state.shelves[slot] = { goodId: good?.id ?? null, price };
+      state.pricePresets![slot] = 100;
+      break;
+    }
+
+    case 'configureDisplays': {
+      requireRule(state.phase === 'prepare' && state.buyingComplete, 'Finish buying before setting displays.');
+      requireRule(new Set(command.displays.map(display => display.slot)).size === DISPLAY_COUNT,
+        'Configure each display exactly once.');
+      const next = Array.from({ length: DISPLAY_COUNT }, (_, slot) => command.displays.find(display => display.slot === slot)!);
+      const selectedGoods = next.flatMap(display => display.goodId ? [display.goodId] : []);
+      requireRule(new Set(selectedGoods).size === selectedGoods.length, 'A good can only be assigned to one display.');
+      const townId = state.townId;
+      requireRule(townId, 'Choose a town before setting displays.');
+      const shelves = next.map(display => {
+        const good = GOODS.find(candidate => candidate.id === display.goodId);
+        requireRule(display.goodId === null || good, 'Unknown good.');
+        requireRule(!good || quantity(state, good.id) > 0, 'Buy this good before displaying it.');
+        return { goodId: good?.id ?? null, price: good ? priceForPreset(townId, good.id, display.pricePreset) : 1 };
+      });
+      state.shelves = shelves;
+      state.pricePresets = next.map(display => display.pricePreset);
+      break;
+    }
+
+    case 'restockDisplay': {
+      requireRule(state.phase === 'open' && !state.pendingNegotiation, 'A display can only be refilled during business.');
+      const { slot } = command;
+      requireRule(slot >= 0 && slot < DISPLAY_COUNT, 'Unknown display.');
+      const goodId = state.shelves[slot].goodId;
+      requireRule(goodId, 'That display is empty.');
+      const displayed = state.displayStock![slot] ?? 0;
+      const reserve = Math.max(0, quantity(state, goodId) - displayed);
+      const moved = Math.min(DISPLAY_CAPACITY - displayed, reserve);
+      requireRule(moved > 0, 'There is no reserve stock for this display.');
+      restockedQuantity = moved;
+      state.displayStock![slot] += moved;
       break;
     }
 
     case 'open': {
       requireRule(state.phase === 'prepare' && state.buyingComplete && town, 'Choose a town and finish buying before opening.');
       state.customers = createCustomers(state, town);
+      state.displayStock = state.shelves.map(shelf => shelf.goodId
+        ? Math.min(DISPLAY_CAPACITY, quantity(state, shelf.goodId)) : 0);
+      state.businessMode = true;
       state.phase = 'open';
       break;
     }
@@ -406,12 +477,13 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
         default:
           throw new RuleError('Unknown negotiation response.');
       }
-      if (salePrice !== null) recordSale(state, goodId, salePrice);
+      if (salePrice !== null) recordSale(state, goodId, salePrice, state.shelves.findIndex(shelf => shelf.goodId === goodId));
       state.negotiations.push({ ...pending, outcome: command.outcome, salePrice });
       state.customerResults.push({ customerIndex: state.served, goodId, result, price: salePrice });
       state.served++;
       state.pendingNegotiation = null;
-      advanceBusiness(state);
+      if (state.businessMode && state.served === state.customers.length) closeDay(state);
+      else if (!state.businessMode) advanceBusiness(state);
       break;
     }
 
@@ -441,6 +513,9 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
       state.purchasesByVendor = {};
       state.negotiations = [];
       state.customerResults = [];
+      state.displayStock = Array.from({ length: DISPLAY_COUNT }, () => 0);
+      state.pricePresets = Array.from({ length: DISPLAY_COUNT }, () => 100);
+      state.businessMode = false;
       break;
     }
   }
@@ -486,6 +561,11 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
     });
   } else if (command.type === 'shelf') {
     record({ day: state.day, type: 'shelfSet', slot: command.slot, goodId: command.goodId as GoodId | null, price: command.price });
+  } else if (command.type === 'configureDisplays') {
+    state.shelves.forEach((shelf, slot) => record({ day: state.day, type: 'shelfSet', slot, goodId: shelf.goodId, price: shelf.price }));
+  } else if (command.type === 'restockDisplay') {
+    const shelf = state.shelves[command.slot];
+    if (shelf.goodId) record({ day: state.day, type: 'displayRestocked', slot: command.slot, goodId: shelf.goodId, quantity: restockedQuantity });
   } else if (command.type === 'open') {
     record({ day: state.day, type: 'shopOpened', shelves: state.shelves.map((shelf, slot) => ({ slot, ...shelf })) });
   }

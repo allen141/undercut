@@ -1,6 +1,6 @@
 # Merchant Ledger redesign — agreed design specification
 
-Status: approved design direction, not implemented. This specification governs the next UI iteration; where it differs from the existing phase and shop-room specifications, this is the intended replacement behavior. Existing rules remain in effect until the relevant changes are implemented.
+Status: approved design direction, partially implemented. This specification governs the next UI iteration; where it differs from the existing phase and shop-room specifications, this is the intended replacement behavior. Existing rules remain in effect until the relevant changes are implemented.
 
 See the [implementation roadmap](merchant-ledger-implementation.md) for the technical work breakdown, dependencies, acceptance criteria and rollout plan.
 
