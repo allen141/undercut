@@ -1,6 +1,12 @@
 # Merchant Ledger — implementation roadmap
 
-Status: proposed implementation plan for the approved [Merchant Ledger redesign](merchant-ledger.md). This is a development roadmap, not a description of functionality already shipped. The design specification and its visual references are authoritative for product decisions.
+Status: implementation in progress for the approved [Merchant Ledger redesign](merchant-ledger.md). The design specification and its visual references remain authoritative for product decisions. This section records the current branch status; acceptance criteria below still describe the full target.
+
+## Current implementation status
+
+The `codex/merchant-ledger-redesign` branch has delivered phase-aware ledger workspaces, atomic display presets, town market comparison, a React Merchant Compass with town previews, saved Gazette editions, historical revenue/profit trends, and individual business visits. New shop sessions allocate limited display stock, persist a waiting customer, offer one refill decision for three seconds, and resolve that visit once. The server projection omits the unserved customer queue. The live HUD now shows visits, revenue, FIFO profit, gold, displayed/reserve stock, inventory value, and recent outcomes.
+
+This branch is still short of the full redesign. Supplier comparison and merchandising are usable but remain inside the current ledger shell; the shared responsive component system, comprehensive React-ledger migration, more detailed market/performance chart interactions, final legacy control removal, and complete historical source/provenance detail remain outstanding. Historical FIFO cost and daily cash/stock values are recorded additively for new results; older records correctly show unavailable per-item cost details.
 
 ## Objectives and boundaries
 

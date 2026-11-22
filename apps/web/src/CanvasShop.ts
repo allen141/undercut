@@ -7,7 +7,7 @@ import {
   newspaperForDay,
 } from '@undercut/game-core';
 import type { BusinessPresentation, GameProps } from './Game.js';
-import { customerPortrait, dialTargets, drawDial, drawRoom, phaseBooks, setCoin, setGood, setCustomerAnimation } from './ShopArt.js';
+import { customerPortrait, drawRoom, phaseBooks, setCoin, setGood, setCustomerAnimation } from './ShopArt.js';
 import { loadShopTextures, placeSprite, skin } from './ShopAssets.js';
 import { roomLayout, shopScale, type Bounds } from './ShopLayout.js';
 
@@ -76,8 +76,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   app.canvas.dataset.renderer = app.renderer.name;
 
   let previous = props().campaign;
-  let panel: Panel | null = previous.state.phase === 'travel' ? 'newspaper'
-    : previous.state.pendingNegotiation ? 'book' : null;
+  let panel: Panel | null = previous.state.pendingNegotiation ? 'book' : null;
   let page: Page = 'summary';
   let pageIndex = 0;
   let journalArticle: number | null = null;
@@ -451,38 +450,30 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const navW = narrow ? 59 : 131;
     control(scene, 'back', 'All campaigns', rect(margin + 3, 12, navW, 44), p.back,
       { copy: narrow ? '‹ Menu' : '‹ All campaigns', disabled: p.busy || !p.online });
-    control(scene, 'stock', 'Inventory and gold', rect(w - margin - (narrow ? 67 : 114), 12, narrow ? 64 : 111, 44),
+    if (phase !== 'open') control(scene, 'stock', 'Inventory and gold', rect(w - margin - (narrow ? 67 : 114), 12, narrow ? 64 : 111, 44),
       () => { if (p.openLedger) p.openLedger('inventory'); else show('stock', 'stock'); }, { copy: money(cash) });
     const location = phase === 'travel' ? `${preview.name} preview` : town?.name ?? 'Between towns';
     text(scene, narrow ? `Day ${state.day} · ${location}` : `${p.campaign.name.slice(0, 36)}  /  Day ${state.day} · ${location}`,
       w / 2, 34, { align: 'center', max: w - (narrow ? 155 : 308), serif: !narrow, size: narrow ? 13 : 17 });
 
+    const ledgerPage = phase === 'travel' ? 'markets' : phase === 'report' ? 'performance'
+      : state.buyingComplete ? 'merchandising' : 'suppliers';
+    const ledgerTitle = phase === 'travel' ? 'Markets' : phase === 'report' ? 'Performance'
+      : state.buyingComplete ? 'Merchandising' : 'Suppliers';
     function openBook() {
-      show('book', 'book');
+      if (p.openLedger) p.openLedger(ledgerPage);
+      else show('book', 'book');
     }
 
-    if (town && phase !== 'travel') {
-      const journalName = `${town.name} Journal`;
-      control(scene, 'town-journal', `Open ${journalName}`, layout.journal, () => {
-        journalArticle = null;
-        show('journal', 'town-journal');
-      }, { copy: journalName });
-    }
-    if (phase === 'travel') {
-      control(scene, 'morning-paper', 'Read the morning newspaper', layout.journal,
-        () => show('newspaper', 'morning-paper'), { copy: 'Morning Gazette' });
-    }
-
-    const bookName = { travel: 'Open route atlas', prepare: 'Open wholesale book', open: 'Open business book', report: 'Day’s takings' }[phase];
-    control(scene, 'book', bookName, layout.book, openBook, { hide: true });
-    if (!modal) {
+    const bookName = `Open ${ledgerTitle}`;
+    if (phase !== 'open') control(scene, 'book', bookName, layout.book, openBook, { hide: true });
+    if (!modal && phase !== 'open') {
       const { x, y, w: width, h: height } = layout.book;
       const nameplate = skin(textures['button-primary'], rect(x, y + height - 24, width, 29), 21, 12);
       scene.addChild(nameplate);
       text(scene, phaseBooks[phase].title, x + width / 2, y + height - 10,
         { serif: true, size: narrow ? 13 : 16, align: 'center', max: width - 12 });
     }
-    if (phase === 'travel' && panel && panel !== 'book') drawDial(scene, textures, layout.travelDial, preview.id, true);
     if (phase === 'prepare' && state.buyingComplete || phase === 'open') {
       layout.sceneShelves.forEach((bounds, slot) => {
         const shelf = state.shelves[slot];
@@ -1087,19 +1078,6 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       }
     }
 
-    if (phase === 'travel' && (!panel || panel === 'book')) {
-      const dialLayer = new Container();
-      scene.addChild(dialLayer);
-      drawDial(dialLayer, textures, layout.travelDial, preview.id, true);
-      const targets = dialTargets(layout.travelDial);
-      TOWNS.forEach((town, i) => control(dialLayer, `preview-${town.id}`, `Preview ${town.name}`, targets.towns[town.id], () => {
-        selectedTown = i;
-        render();
-      }, { hide: true, active: i === selectedTown }));
-      control(dialLayer, 'choose-town', `Choose ${preview.name}`, targets.confirm,
-        () => p.send({ type: 'chooseTown', townId: preview.id }), { hide: true, disabled: blocked });
-    }
-
     keyboard.setAttribute('aria-label', modal ? `${readingTitle} controls` : 'Shop controls');
     sync(actions);
     reading.hidden = !modal;
@@ -1213,12 +1191,14 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     if (document.hidden) {
       if (playback) visitPausedAt = performance.now();
       clearTimeout(animationClock);
+      clearTimeout(timer);
     } else if (playback && visitPausedAt !== undefined) {
       playback.start += performance.now() - visitPausedAt;
       visitPausedAt = undefined;
       render();
       scheduleVisit();
     }
+    if (!document.hidden) scheduleService();
   }
 
   function update() {
@@ -1240,8 +1220,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       } else if (current.pendingNegotiation || prior.phase === 'open' && current.phase === 'report') {
         renderOutcome = true;
       } else if (current.phase !== prior.phase) {
-        focus(current.phase === 'travel' ? 'preview-meadow' : 'book');
-        panel = current.phase === 'travel' ? 'newspaper' : null;
+        focus('book');
+        panel = null;
         returnFocus = 'book';
         viewedVendor = '';
         selectedOffer = '';

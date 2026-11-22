@@ -93,19 +93,24 @@ const pages: LedgerPage[] = [
     </li>)}</ol>;
   } },
   { id: 'gazette', title: 'Gazette', render: ({ state }) => {
-    const events = state.journal ?? [];
-    const days = [...new Set(state.history.map(result => result.day))].reverse();
-    if (!days.length) return <p className="ledger-empty">The first edition is published after your first completed day.</p>;
-    return <div className="ledger-papers">{days.map(day => {
-      const edition = digest(events, day, state.history);
-      return <article className="ledger-paper" key={day}>
-        <span className="ledger-paper-kicker">The Merchant’s Register · Day {day}</span>
-        <h2>Trade closes in {edition.location}</h2>
-        <p>{edition.result ? `The shop earned ${money(edition.result.revenue)} in sales and ${money(edition.result.profit)} in trading profit.` : 'The daily account is unavailable.'}</p>
-        <p>{edition.purchaseCount === null ? 'Earlier purchase details were not archived.' : edition.purchaseCount ? `${edition.purchaseCount} items entered stock.` : 'No stock purchases were recorded.'} {edition.products === null ? 'Earlier customer details were not archived.' : edition.products.length ? `Customers bought ${edition.products.map(goodName).join(', ')}.` : 'No items sold.'}</p>
-        <span className="ledger-paper-caption">{edition.customers === null ? 'Edition based on the saved daily summary' : `${edition.customers} customer reports recorded`}</span>
-      </article>;
-    })}</div>;
+    const issues = [...(state.newspapers ?? [])].reverse();
+    if (!issues.length) return <p className="ledger-empty">This campaign predates the saved Gazette archive. New editions will be preserved as they are issued.</p>;
+    return <div className="ledger-papers">{issues.map(issue => <article className="ledger-paper" key={issue.day}>
+      <span className="ledger-paper-kicker">{issue.edition} · Morning edition · Day {issue.day}</span>
+      {issue.articles.map(article => <section key={article.id}>
+        <h2>{article.headline}</h2><p>{article.body}</p>
+        <span className="ledger-paper-caption">{article.source} · {article.category === 'world' ? 'World' : article.category === 'trade' ? 'Trade' : 'Local'} report</span>
+      </section>)}
+      <h3>Market outlook · Day {issue.day}</h3>
+      <div className="ledger-table market-matrix" role="table" aria-label={`Market outlook for day ${issue.day}`}>
+        <div role="row" className="ledger-table-head"><span role="columnheader">Good</span><span role="columnheader">Current estimate</span><span role="columnheader">Daily change</span><span role="columnheader">Forecast</span></div>
+        {issue.outlook.map(row => <div role="row" key={row.goodId}>
+          <span role="cell">{goodName(row.goodId)}</span><span role="cell">{money(row.current)}</span>
+          <span role="cell">{row.change > 0 ? '+' : ''}{money(row.change)}</span>
+          <span role="cell">{money(row.projected)} · {row.projectedChange > 0 ? '+' : ''}{money(row.projectedChange)}</span>
+        </div>)}
+      </div>
+    </article>)}</div>;
   } },
 ];
 
@@ -149,11 +154,28 @@ function MerchandisingPage({ state, send, busy, online }: PageContext) {
 function MarketExplorer({ state, send, busy, online }: PageContext) {
   const [selectedGood, setSelectedGood] = useState(GOODS[0].id);
   const currentTown = TOWNS.find(town => town.id === state.townId);
+  const [selectedTownId, setSelectedTownId] = useState(currentTown?.id ?? TOWNS[0].id);
+  const selectedTown = TOWNS.find(town => town.id === selectedTownId) ?? TOWNS[0];
   return <>
     <p className="ledger-intro">Estimated retail ranges and demand context before travel. Current seller offers appear only after arrival.</p>
     <label className="ledger-filter">Commodity<select value={selectedGood} onChange={event => setSelectedGood(event.target.value as typeof selectedGood)}>
       {GOODS.map(good => <option key={good.id} value={good.id}>{good.name}</option>)}
     </select></label>
+    {state.phase === 'travel' && <section className="merchant-compass-workspace" aria-label="Merchant compass">
+      <div className="merchant-compass" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/destination-dial.webp)` }}>
+        {TOWNS.map(town => <button type="button" key={town.id} aria-pressed={selectedTownId === town.id}
+          className={`merchant-compass-town merchant-compass-${town.id}`} onClick={() => setSelectedTownId(town.id)}>
+          {town.name}
+        </button>)}
+      </div>
+      <div className="merchant-route-preview">
+        <div className="town-window-preview" role="img" aria-label={`${selectedTown.name} vista`} style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/town-${selectedTown.id}.webp)` }} />
+        <div><h3>{selectedTown.name}</h3><p>{selectedTown.specialty}</p>
+          <button className="primary" type="button" disabled={busy || !online}
+            onClick={() => send({ type: 'chooseTown', townId: selectedTown.id })}>Travel to {selectedTown.name}</button>
+        </div>
+      </div>
+    </section>}
     <div className="market-explorer-grid">{TOWNS.map(town => {
       const range = priceRange(town, selectedGood);
       const held = quantity(state, selectedGood);
@@ -161,8 +183,8 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
       return <article className={`market-town ${currentTown?.id === town.id ? 'selected' : ''}`} key={town.id}>
         <h3>{town.name}</h3><p>{town.specialty}</p>
         <dl><dt>Estimated retail</dt><dd>{range.min}–{range.max}g</dd><dt>Demand index</dt><dd>{demand.toFixed(1)}×</dd><dt>Held stock</dt><dd>{held}</dd></dl>
-        {state.phase === 'travel' && <button className="primary" disabled={busy || !online}
-          onClick={() => send({ type: 'chooseTown', townId: town.id })}>Travel to {town.name}</button>}
+        {state.phase === 'travel' && <button type="button" aria-pressed={selectedTownId === town.id}
+          onClick={() => setSelectedTownId(town.id)}>Preview {town.name}</button>}
       </article>;
     })}</div>
     <h3>Commodity comparison</h3>
@@ -184,6 +206,32 @@ function PerformancePage({ state, send, busy, online }: PageContext) {
     revenue: sum.revenue + day.revenue, costs: sum.costs + day.costOfSales,
     profit: sum.profit + day.profit, sold: sum.sold + day.sold,
   }), { revenue: 0, costs: 0, profit: 0, sold: 0 });
+  const commodityResults = GOODS.map(good => {
+    const outcomes = history.flatMap(day => (day.customerResults ?? [])
+      .filter(result => result.goodId === good.id));
+    const sales = outcomes.filter(result => result.price !== null);
+    const revenue = sales.reduce((sum, result) => sum + (result.price ?? 0), 0);
+    const costsRecorded = sales.every(result => typeof result.costOfSales === 'number');
+    const costs = costsRecorded ? sales.reduce((sum, result) => sum + (result.costOfSales ?? 0), 0) : null;
+    return { good, customers: outcomes.length, units: sales.length, revenue, costs, profit: costs === null ? null : revenue - costs };
+  });
+  const townResults = TOWNS.map(town => {
+    const days = history.filter(day => day.townId === town.id);
+    return { town, days: days.length, revenue: days.reduce((sum, day) => sum + day.revenue, 0), profit: days.reduce((sum, day) => sum + day.profit, 0) };
+  }).filter(row => row.days > 0);
+  const vendorResults = VENDORS.map(vendor => {
+    const purchases = history.reduce((sum, day) => {
+      const result = day.purchasesByVendor?.[vendor.id];
+      return { quantity: sum.quantity + (result?.quantity ?? 0), gold: sum.gold + (result?.gold ?? 0) };
+    }, { quantity: 0, gold: 0 });
+    return { vendor, ...purchases };
+  }).filter(row => row.quantity > 0 || row.gold > 0);
+  const missedResults = history.flatMap(day => day.customerResults ?? [])
+    .filter(result => result.price === null)
+    .reduce<Record<string, number>>((counts, result) => {
+      counts[result.result] = (counts[result.result] ?? 0) + 1;
+      return counts;
+    }, {});
   const max = Math.max(1, ...history.map(day => day.revenue));
   const selected = history.find(day => day.day === selectedDay);
   return <>
@@ -205,13 +253,54 @@ function PerformancePage({ state, send, busy, online }: PageContext) {
           <span className="bar-pair"><i style={{ height: `${Math.max(3, day.revenue / max * 100)}%` }} /><b style={{ height: `${Math.max(3, Math.max(0, day.profit) / max * 100)}%` }} /></span>
           <small>Day {day.day}</small></button>)}</div><p className="chart-legend"><i /> Revenue <b /> Profit</p>
       </section>
-      {selected && <p className="selected-day">Day {selected.day} · {townName(selected.townId)} · Revenue {money(selected.revenue)} · COGS {money(selected.costOfSales)} · Profit {money(selected.profit)} · Wholesale {money(selected.purchases)}</p>}
+      {selected && (() => {
+        const before = state.history.filter(day => day.day < selected.day);
+        const startingGold = selected.startingGold ?? 100 + before.reduce((sum, day) => sum + day.revenue - day.purchases, 0);
+        const endingGold = selected.endingGold ?? startingGold - selected.purchases + selected.revenue;
+        return <>
+          <p className="selected-day">Day {selected.day} · {townName(selected.townId)} · Revenue {money(selected.revenue)} · COGS {money(selected.costOfSales)} · Profit {money(selected.profit)} · Wholesale {money(selected.purchases)}</p>
+          <section className="ledger-analysis" aria-label={`Cash reconciliation for day ${selected.day}`}>
+            <h3>Cash reconciliation · Day {selected.day}</h3>
+            <p>Starting gold {money(startingGold)} − wholesale purchases {money(selected.purchases)} + sales revenue {money(selected.revenue)} = ending gold {money(endingGold)}.</p>
+            <p>FIFO cost of goods sold is used to calculate profit; it is not an additional cash expense. Remaining stock value: {selected.remainingStockValue === undefined ? 'Not recorded for this day' : money(selected.remainingStockValue)}.</p>
+          </section>
+        </>;
+      })()}
       <div className="ledger-table" role="table" aria-label="Daily shop performance">
         <div role="row" className="ledger-table-head"><span role="columnheader">Day / town</span><span role="columnheader">Revenue</span><span role="columnheader">Profit</span></div>
         {[...history].reverse().map(day => <button type="button" role="row" className="performance-row" key={day.day} onClick={() => setSelectedDay(day.day)}>
           <span role="cell">Day {day.day} · {townName(day.townId)}</span><span role="cell">{money(day.revenue)}</span><span role="cell">{money(day.profit)}</span>
         </button>)}
       </div>
+      <h3>Results by commodity</h3>
+      <div className="ledger-table performance-products" role="table" aria-label="Commodity performance">
+        <div role="row" className="ledger-table-head"><span role="columnheader">Good</span><span role="columnheader">Sales</span><span role="columnheader">Revenue</span><span role="columnheader">FIFO cost</span><span role="columnheader">Profit</span></div>
+        {commodityResults.map(row => <div role="row" key={row.good.id}>
+          <span role="cell">{row.good.name}</span><span role="cell">{row.units}/{row.customers}</span><span role="cell">{money(row.revenue)}</span>
+          <span role="cell">{row.costs === null ? 'Not recorded' : money(row.costs)}</span><span role="cell">{row.profit === null ? 'Not recorded' : money(row.profit)}</span>
+        </div>)}
+      </div>
+      <h3>Results by town</h3>
+      <div className="ledger-table" role="table" aria-label="Town performance">
+        <div role="row" className="ledger-table-head"><span role="columnheader">Town</span><span role="columnheader">Days</span><span role="columnheader">Revenue</span><span role="columnheader">Profit</span></div>
+        {townResults.map(row => <div role="row" key={row.town.id}>
+          <span role="cell">{row.town.name}</span><span role="cell">{row.days}</span><span role="cell">{money(row.revenue)}</span><span role="cell">{money(row.profit)}</span>
+        </div>)}
+      </div>
+      <h3>Vendor spending</h3>
+      {!vendorResults.length ? <p className="ledger-empty">No vendor purchases in the selected history.</p> : <div className="ledger-table" role="table" aria-label="Vendor spending">
+        <div role="row" className="ledger-table-head"><span role="columnheader">Vendor</span><span role="columnheader">Units</span><span role="columnheader">Gold spent</span></div>
+        {vendorResults.map(row => <div role="row" key={row.vendor.id}>
+          <span role="cell">{row.vendor.name}</span><span role="cell">{row.quantity}</span><span role="cell">{money(row.gold)}</span>
+        </div>)}
+      </div>}
+      <h3>Missed sales</h3>
+      {!Object.keys(missedResults).length ? <p className="ledger-empty">No recorded missed customer sales.</p> : <div className="ledger-table" role="table" aria-label="Missed sales by outcome">
+        <div role="row" className="ledger-table-head"><span role="columnheader">Outcome</span><span role="columnheader">Visits</span></div>
+        {Object.entries(missedResults).map(([reason, count]) => <div role="row" key={reason}>
+          <span role="cell">{reason.replace(/([A-Z])/g, ' $1')}</span><span role="cell">{count}</span>
+        </div>)}
+      </div>}
     </>}
     {state.phase === 'report' && <button className="primary begin-next-day" disabled={busy || !online}
       onClick={() => send({ type: 'nextDay' })}>Begin next day</button>}
@@ -220,6 +309,7 @@ function PerformancePage({ state, send, busy, online }: PageContext) {
 
 function describeEvent(event: JournalEvent) {
   switch (event.type) {
+    case 'newspaperIssued': return `Published the Day ${event.issue.day} Gazette`;
     case 'townChosen': return `Travelled to ${townName(event.townId)}`;
     case 'vendorVisited': return `Visited ${vendorName(event.vendorId)}`;
     case 'vendorLeft': return `Left ${vendorName(event.vendorId)}`;

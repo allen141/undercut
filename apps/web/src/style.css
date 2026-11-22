@@ -76,6 +76,30 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
   font-size: .84rem;
   font-variant-numeric: tabular-nums;
 }
+.business-hud {
+  position: absolute;
+  z-index: 2;
+  top: 66px;
+  left: 14px;
+  width: min(430px, calc(100vw - 28px));
+  padding: 10px 12px;
+  border: 1px solid rgb(189 149 110 / 75%);
+  border-radius: 9px;
+  background: rgb(34 28 38 / 92%);
+  color: #eee0c9;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+}
+.business-hud-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.business-hud-metrics>div { display: flex; flex-direction: column; min-width: 0; }
+.business-hud-metrics span,.business-hud-feed li>span { color: #c0af9a; font-size: .68rem; }
+.business-hud-metrics strong { color: #f0d092; font-size: .95rem; font-variant-numeric: tabular-nums; }
+.business-hud-displays,.business-hud-waiting { margin: 6px 0 0; font-size: .72rem; line-height: 1.4; }
+.business-hud-waiting { color: #f1c982; }
+.business-hud-feed { display: grid; gap: 3px; margin: 7px 0 0; padding: 7px 0 0; border-top: 1px solid #625143; list-style: none; }
+.business-hud-feed li { display: grid; grid-template-columns: 75px minmax(0,1fr) auto; align-items: baseline; gap: 7px; }
+.business-hud-feed li strong { overflow: hidden; color: #eadfcf; font-size: .7rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.business-hud-feed li>span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .ledger-backdrop {
   position: absolute;
   z-index: 10;
@@ -170,6 +194,15 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
 .market-town dl { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; font-size: .82rem; }
 .market-town dt { color: #b4aab4; }.market-town dd { margin: 0; font-variant-numeric: tabular-nums; }
 .market-town button { width: 100%; }
+.merchant-compass-workspace { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(240px,.8fr); gap: 18px; align-items: center; margin: 18px 0 24px; padding: 16px; border: 1px solid #544638; border-radius: 10px; background: #29232d; }
+.merchant-compass { position: relative; width: min(760px,100%); aspect-ratio: 640/290; justify-self: center; background-size: contain; background-position: center; background-repeat: no-repeat; }
+.merchant-compass-town { position: absolute; transform: translate(-50%,-50%); min-height: 34px; padding: 5px 9px; border-color: #806046; background: rgb(42 36 40 / 88%); color: #f1ddb8; font-size: .76rem; box-shadow: 0 2px 8px rgb(0 0 0 / 32%); }
+.merchant-compass-town[aria-pressed="true"] { border-color: #e5bd76; background: #684d3e; color: #fff0cf; }
+.merchant-compass-meadow { left: 23.8%; top: 61%; }.merchant-compass-forge { left: 50%; top: 43%; }.merchant-compass-harbor { left: 76.3%; top: 61%; }
+.merchant-route-preview { display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 14px; align-items: center; }
+.merchant-route-preview h3 { margin-bottom: 4px; color: #f0d7ad; }
+.merchant-route-preview p { margin: 0 0 10px; color: #b4aab4; font-size: .82rem; }
+.town-window-preview { aspect-ratio: 1; background-position: center; background-size: cover; border: 3px solid #96734f; border-radius: 6px; box-shadow: inset 0 0 0 2px #302633; }
 .market-matrix>div { grid-template-columns: minmax(100px,1fr) repeat(3,minmax(72px,.8fr)); }
 .performance-chart { margin: 18px 0; padding: 16px; border: 1px solid #493b47; border-radius: 8px; background: #29232d; }
 .performance-bars { height: 190px; display: flex; align-items: stretch; gap: 8px; overflow-x: auto; padding: 8px 4px 0; }
@@ -184,13 +217,26 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
 .chart-legend b { background: #8fb29c; }
 .performance-row { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) minmax(78px,.55fr) minmax(90px,.7fr); text-align: left; border: 0; border-bottom: 1px solid #3d333f; border-radius: 0; background: transparent; font-weight: 400; }
 .performance-row span:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.performance-products { overflow-x: auto; }
+.performance-products>div { min-width: 520px; grid-template-columns: minmax(112px,1fr) repeat(4,minmax(72px,.72fr)); }
+.ledger-table[aria-label="Town performance"]>div { grid-template-columns: minmax(0,1fr) repeat(3,minmax(72px,.7fr)); }
+.ledger-analysis { margin: 16px 0; padding: 14px 16px; border: 1px solid #766048; border-radius: 8px; background: #322a2c; color: #ead9c4; }
+.ledger-analysis h3 { margin: 0 0 8px; color: #e4ba7f; }
+.ledger-analysis p { margin: 6px 0; }
 .selected-day { padding: 12px; border-left: 3px solid #d4b67d; background: #302633; }
 .begin-next-day { margin-top: 20px; }
 @media (max-width: 900px) { .ledger-display-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 700px) { .market-explorer-grid { grid-template-columns: 1fr; }.market-matrix>div { grid-template-columns: minmax(80px,1fr) repeat(3,minmax(60px,.8fr)); font-size: .72rem; } }
+@media (max-width: 740px) { .merchant-compass-workspace { grid-template-columns: 1fr; }.merchant-route-preview { grid-template-columns: 82px minmax(0,1fr); }.merchant-compass-town { min-height: 30px; padding: 4px 6px; font-size: .68rem; } }
 @media (max-width: 520px) { .ledger-display-grid { grid-template-columns: 1fr; } }
 .ledger-book-footer { border-top: 1px solid #463541; border-bottom: 0; color: #9f929e; font-size: .75rem; }
 @media (max-width: 650px) {
+  .business-hud { top: 59px; left: 8px; width: min(350px,calc(100vw - 16px)); padding: 8px 9px; }
+  .business-hud-metrics { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; }
+  .business-hud-metrics span { font-size: .6rem; }
+  .business-hud-metrics strong { font-size: .82rem; }
+  .business-hud-feed li { grid-template-columns: 60px minmax(0,1fr); }
+  .business-hud-feed li>span:last-child { display: none; }
   .ledger-backdrop { padding: 0; }
   .ledger-book { height: 100%; border-radius: 0; }
   .ledger-book-header { padding: 14px 16px; }
@@ -199,6 +245,7 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
   .ledger-nav button { padding: 7px 10px; font-size: .76rem; }
   .ledger-content { padding: 17px 15px; }
   .ledger-table>div { grid-template-columns: minmax(0,1fr) minmax(58px,.5fr) minmax(72px,.65fr); gap: 6px; padding: 8px; font-size: .79rem; }
+  .performance-products>div { grid-template-columns: minmax(112px,1fr) repeat(4,minmax(72px,.72fr)); }
   .ledger-metrics { grid-template-columns: repeat(2,1fr); gap: 6px; }
   .ledger-metrics>div { padding: 10px 8px; }
   .ledger-metrics strong { font-size: 1rem; }

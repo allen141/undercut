@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CUSTOMERS_PER_DAY, GOODS, inventoryValue, quantity } from '@undercut/game-core';
+import { CUSTOMERS_PER_DAY, DISPLAY_CAPACITY, GOODS, inventoryValue, quantity } from '@undercut/game-core';
 import type { Command } from '@undercut/contracts';
 import type { Campaign } from './App.js';
 import type { ShopController } from './CanvasShop.js';
@@ -115,9 +115,9 @@ export function Game(props: GameProps) {
   return <main ref={viewport} className="canvas-game" aria-label={campaign.name} aria-busy={busy} data-revision={campaign.revision}>
     <div className="canvas-stage" ref={stage} />
     <div className="canvas-controls" ref={controls} role="group" aria-label="Shop controls" />
-    <button className="ledger-menu" type="button" aria-label={`Open ledger · ${state.gold} gold`} onClick={() => openLedger('inventory')}>
+    {state.phase !== 'open' && <button className="ledger-menu" type="button" aria-label={`Open ledger · ${state.gold} gold`} onClick={() => openLedger('inventory')}>
       <span>Ledger · </span>◈ {state.gold}g
-    </button>
+    </button>}
     <div className="canvas-announcement">
       <div ref={reading} role="region" aria-label="Current book page" hidden />
       {error && <p role="alert">{error}</p>}
@@ -141,6 +141,25 @@ export function Game(props: GameProps) {
         {ledger.map((entry, index) => <li key={index}>{entry}</li>)}
       </ol>}
     </div>
+    {state.phase === 'open' && <section className="business-hud" aria-label="Live business performance">
+      <div className="business-hud-metrics">
+        <div><span>Visits</span><strong>{state.served}/{CUSTOMERS_PER_DAY}</strong></div>
+        <div><span>Revenue</span><strong>{state.revenue}g</strong></div>
+        <div><span>Gross profit</span><strong>{state.revenue - state.costOfSales}g</strong></div>
+        <div><span>Gold</span><strong>{state.gold}g</strong></div>
+      </div>
+      <p className="business-hud-displays">Displays {state.shelves.flatMap((shelf, slot) => shelf.goodId
+        ? [`${GOODS.find(item => item.id === shelf.goodId)?.name ?? shelf.goodId} ${state.displayStock?.[slot] ?? 0}/${DISPLAY_CAPACITY} · ${Math.max(0, quantity(state, shelf.goodId) - (state.displayStock?.[slot] ?? 0))} reserve`] : []).join(' · ') || 'No goods assigned'}
+        {' · '}Inventory at cost {inventoryValue(state)}g</p>
+      {state.pendingRestock && <p className="business-hud-waiting">Customer waiting for {GOODS.find(item => item.id === state.pendingRestock?.goodId)?.name ?? 'stock'}.</p>}
+      {!!state.customerResults.length && <ol className="business-hud-feed" aria-label="Recent customer outcomes">
+        {[...state.customerResults].slice(-3).reverse().map(result => <li key={result.customerIndex}>
+          <span>Customer {result.customerIndex + 1}</span>
+          <strong>{GOODS.find(item => item.id === result.goodId)?.name ?? result.goodId} · {result.result.replace(/([A-Z])/g, ' $1')}</strong>
+          <span>{result.price === null ? result.result : `${result.price}g · ${typeof result.costOfSales === 'number' ? `FIFO ${result.costOfSales}g` : 'FIFO cost unavailable'}`}</span>
+        </li>)}
+      </ol>}
+    </section>}
     {view !== 'ready' && <div className="canvas-recovery">
       {view === 'loading' ? <p>Opening the shop…</p> : <>
         <p>WebGL couldn’t start. Check that hardware acceleration is enabled and try again.</p>
