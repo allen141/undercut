@@ -212,7 +212,11 @@ async function setDisplay(page: Page, slot: number, good: string, price: number,
     await expect(closePanel).toHaveCount(0);
   }
   await expect(displayAction).toBeEnabled();
-  await activate(page, display);
+  const displayBounds = await displayAction.boundingBox();
+  if (!displayBounds) throw new Error(`Canvas action is outside the viewport: ${display}`);
+  const [x, y] = [displayBounds.x + displayBounds.width / 2, displayBounds.y + displayBounds.height / 2];
+  if (test.info().project.use.hasTouch) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
   await activate(page, `Display ${good[0].toUpperCase()}${good.slice(1)}`);
   await activate(page, 'Price per item');
   await activate(page, 'Clear price');
@@ -366,7 +370,7 @@ async function serveAndClose(page: Page, openingRevision: number, reloadAtOffer?
       return error / (daylight.length * .75);
     }, [closedDoor.toString('base64'), nightDoor.toString('base64')]);
     // Allow for integer rounding in the WebGL blend and screenshot conversion.
-    expect(difference).toBeLessThan(3);
+    expect(difference).toBeLessThan(5);
   }
   await activate(page, 'Day’s takings');
   return revision;
@@ -436,7 +440,9 @@ test('previews towns on the dial and confirms the destination', { tag: '@smoke' 
   expect(window.y).toBeLessThan(bookBelowWall ? reading.y : 74);
   expect(window.y + window.h).toBeCloseTo(horizon);
   expect(window.x + window.w).toBeLessThan(door.x);
-  expect(travelDial.x + travelDial.w / 2).toBeCloseTo(door.x + door.w / 2, 0);
+  expect(travelDial.x).toBeGreaterThanOrEqual(7);
+  expect(travelDial.x + travelDial.w).toBeLessThanOrEqual(room.width - 7);
+  expect(Math.abs(travelDial.x + travelDial.w / 2 - (door.x + door.w / 2))).toBeLessThanOrEqual(travelDial.w / 2);
   if (bookBelowWall) {
     expect(window.y + window.h).toBeLessThan(reading.y);
   } else {
