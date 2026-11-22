@@ -28,13 +28,20 @@ export function Game(props: GameProps) {
   const [view, setView] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [business, setBusiness] = useState<BusinessPresentation | null>(null);
-  const [ledgerPage, setLedgerPage] = useState<LedgerPageId>('inventory');
-  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [ledgerPage, setLedgerPage] = useState<LedgerPageId>(props.campaign.state.phase === 'report' ? 'performance' : 'inventory');
+  const [ledgerOpen, setLedgerOpen] = useState(props.campaign.state.phase === 'report');
   const openLedger = useCallback((page: LedgerPageId = 'inventory') => {
     setLedgerPage(page);
     setLedgerOpen(true);
   }, []);
   const closeLedger = useCallback(() => setLedgerOpen(false), []);
+
+  useEffect(() => {
+    if (props.campaign.state.phase === 'report') {
+      setLedgerPage('performance');
+      setLedgerOpen(true);
+    }
+  }, [props.campaign.state.phase, props.campaign.state.day]);
 
   useEffect(() => {
     const element = viewport.current;

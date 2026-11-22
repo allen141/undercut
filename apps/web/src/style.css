@@ -97,6 +97,11 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
   background: #211b25;
   box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
 }
+/* Closing is an analytical workspace, so let the existing shop recede behind it. */
+@media (min-width: 651px) {
+  .ledger-backdrop:has(.ledger-kicker) { padding: 14px; }
+  .ledger-book { width: min(1560px, 100%); height: min(960px, 100%); }
+}
 .ledger-book-header, .ledger-book-footer {
   display: flex;
   align-items: center;
