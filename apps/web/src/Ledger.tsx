@@ -183,41 +183,26 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
       || ('townId' in effect && effect.townId === selectedTownId))) ?? [];
   const news = matchingArticles.length ? matchingArticles : latestIssue?.articles.slice(0, 2) ?? [];
   return <div className="market-explorer">
-    <section className="market-good-picker" aria-label="Choose a commodity">
-      <span className="market-section-label">Compare commodity</span>
-      <div className="market-good-options" role="group" aria-label="Commodities">
-        {GOODS.map(good => <button type="button" key={good.id} aria-pressed={selectedGood === good.id}
-          className={selectedGood === good.id ? 'selected' : ''} onClick={() => setSelectedGood(good.id)}>
-          <img src={`${import.meta.env.BASE_URL}shop-art/good-${good.id}.webp`} alt=""/><span>{good.name}</span>
-        </button>)}
-      </div>
-    </section>
     <div className="market-explorer-panels">
       <section className="market-compass-card ledger-chart-card" aria-label="Choose a town">
         <h3>Merchant compass</h3>
-        <div className="market-compass-body">
-          <div className="merchant-compass" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/destination-dial.webp)` }}>
-            {TOWNS.map(town => <button type="button" key={town.id} aria-pressed={selectedTownId === town.id}
-              className={`merchant-compass-town merchant-compass-${town.id}`} onClick={() => setSelectedTownId(town.id)}>{town.name}</button>)}
-          </div>
-          <div className="market-route-card">
-            <img src={`${import.meta.env.BASE_URL}shop-art/town-${selectedTown.id}.webp`} alt=""/>
-            <div><strong>{selectedTown.name}</strong><small>{selectedTown.specialty}</small>
-              <button className="primary" type="button" disabled={busy || !online || state.phase !== 'travel'}
-                onClick={() => send({ type: 'chooseTown', townId: selectedTown.id })}>{state.phase === 'travel' ? `Travel to ${selectedTown.name}` : selectedTown.name}</button>
-            </div>
-          </div>
+        <div className="merchant-compass" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/destination-dial.webp)` }}>
+          {TOWNS.map(town => <button type="button" key={town.id} aria-pressed={selectedTownId === town.id}
+            className={`merchant-compass-town merchant-compass-${town.id}`} onClick={() => setSelectedTownId(town.id)}>{town.name}</button>)}
         </div>
       </section>
-      <section className="market-town-prices ledger-chart-card" aria-label={`Estimated ${goodName(selectedGood)} prices by town`}>
+      <section className="market-town-prices ledger-chart-card" aria-label="Select a commodity and compare estimated prices by town">
         <h3>Prices by town <small>estimated retail</small></h3>
-        <div className="market-price-table" role="table" aria-label={`Retail price range for ${goodName(selectedGood)}`}>
+        <div className="market-price-table" role="table" aria-label="Estimated retail ranges by town and commodity">
           <div role="row" className="market-price-head"><span role="columnheader">Good</span>{TOWNS.map(town => <span role="columnheader" key={town.id}>{town.name}</span>)}</div>
-          <div role="row"><span role="rowheader"><img src={`${import.meta.env.BASE_URL}shop-art/good-${selectedGood}.webp`} alt=""/>{goodName(selectedGood)}</span>
-            {TOWNS.map(town => { const range = priceRange(town, selectedGood); return <span role="cell" key={town.id}>{range.min}–{range.max}g</span>; })}
-          </div>
+          {GOODS.map(good => <div role="row" key={good.id} className={selectedGood === good.id ? 'selected' : ''}>
+            <button type="button" role="cell" className="market-good-select" aria-pressed={selectedGood === good.id}
+              aria-label={`Select ${good.name} for chart and Gazette`} onClick={() => setSelectedGood(good.id)}>
+              <img src={`${import.meta.env.BASE_URL}shop-art/good-${good.id}.webp`} alt=""/><strong>{good.name}</strong>
+            </button>
+            {TOWNS.map(town => { const range = priceRange(town, good.id); return <span role="cell" key={town.id}><strong>{range.min}–{range.max}g</strong><small>{town.demand[good.id].toFixed(1)}× demand</small></span>; })}
+          </div>)}
         </div>
-        <div className="market-demand-row"><span>Local demand</span>{TOWNS.map(town => <strong key={town.id}>{town.demand[selectedGood].toFixed(1)}×</strong>)}</div>
       </section>
       <section className="market-history-card ledger-chart-card" aria-label={`${goodName(selectedGood)} prices across towns`}>
         <div className="market-panel-title"><h3>{goodName(selectedGood)} price by town</h3><span><i className="market-legend-observed"/>Recorded buyer range midpoint <i className="market-legend-estimate"/>Current retail estimate</span></div>
@@ -236,7 +221,9 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
         })}</div>}
       </section>
     </div>
-    <div className="market-selection-footer"><span>Carried {goodName(selectedGood)}: {quantity(state, selectedGood)} units</span><span>Selected destination: <strong>{selectedTown.name}</strong></span></div>
+    <div className="market-selection-footer"><span>Carried {goodName(selectedGood)}: {quantity(state, selectedGood)} units · Destination: <strong>{selectedTown.name}</strong></span>
+      <button className="primary" type="button" disabled={busy || !online || state.phase !== 'travel'}
+        onClick={() => send({ type: 'chooseTown', townId: selectedTown.id })}>{state.phase === 'travel' ? `Travel to ${selectedTown.name}` : 'Travel unavailable'}</button></div>
   </div>;
 }
 
