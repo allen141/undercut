@@ -186,11 +186,11 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
     <div className="market-explorer-panels">
       <section className="market-compass-card ledger-chart-card" aria-label="Choose a town">
         <h3>Merchant compass</h3>
-        <div className="merchant-compass" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/destination-dial.svg)` }}>
+        <div className="merchant-compass" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/destination-dial-hd.webp)` }}>
           <svg className={`merchant-compass-needle needle-${selectedTownId}`} viewBox="0 0 640 298" aria-hidden="true">
-            <path d="M320 262 L309 104 L320 79 L331 104 Z" fill="#855528" stroke="#4d301d" strokeWidth="3" strokeLinejoin="round"/>
-            <path d="M320 256 L314 106 L320 87 L326 106 Z" fill="#f4d27e" stroke="#fff0ba" strokeWidth="1.2" strokeLinejoin="round"/>
-            <circle cx="320" cy="260" r="6" fill="#f0cf78" stroke="#68451f" strokeWidth="2"/>
+            <path d="M320 80 L315 251 L320 257 L325 251 Z" fill="#855528" stroke="#4d301d" strokeWidth="1.5" strokeLinejoin="round"/>
+            <path d="M320 86 L318 247 L320 251 L322 247 Z" fill="#f4d27e" stroke="#fff0ba" strokeWidth=".7" strokeLinejoin="round"/>
+            <circle cx="320" cy="253" r="4" fill="#f0cf78" stroke="#68451f" strokeWidth="1.5"/>
           </svg>
           {TOWNS.map(town => <button type="button" key={town.id} aria-pressed={selectedTownId === town.id}
             aria-label={`Select ${town.name}`}

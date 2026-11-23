@@ -486,8 +486,8 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
 @media(max-width:700px) { .market-gazette-outlook { grid-template-columns: auto auto 1fr; gap: 5px; padding: 2px 5px; font-size: .58rem; }.market-gazette-outlook small { grid-column: auto; font-size: .53rem; text-align: right; } }
 
 /* The town names are accessible hit areas; the compass art stays unobstructed. */
-.market-compass-card .merchant-compass { position: relative; width: min(100%,680px); aspect-ratio: 640/298; background-position: center; background-size: contain; background-repeat: no-repeat; }
-.market-compass-card .merchant-compass-needle { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; transform-origin: 50% 87.2%; transition: transform 520ms cubic-bezier(.2,.8,.25,1); filter: drop-shadow(0 2px 2px #4a2d1d99); }
+.market-compass-card .merchant-compass { position: relative; width: min(100%,680px); aspect-ratio: 1840/855; background-position: center; background-size: contain; background-repeat: no-repeat; }
+.market-compass-card .merchant-compass-needle { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; transform-origin: 50% 85%; transition: transform 520ms cubic-bezier(.2,.8,.25,1); filter: drop-shadow(0 2px 2px #4a2d1d99); }
 .market-compass-card .merchant-compass-needle.needle-meadow { transform: rotate(-67deg); }
 .market-compass-card .merchant-compass-needle.needle-forge { transform: rotate(0deg) scaleY(.72); }
 .market-compass-card .merchant-compass-needle.needle-harbor { transform: rotate(67deg); }
