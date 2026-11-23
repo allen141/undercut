@@ -174,56 +174,102 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
   const currentTown = TOWNS.find(town => town.id === state.townId);
   const [selectedTownId, setSelectedTownId] = useState(currentTown?.id ?? TOWNS[0].id);
   const selectedTown = TOWNS.find(town => town.id === selectedTownId) ?? TOWNS[0];
-  const townRanges = TOWNS.map(town => priceRange(town, selectedGood));
-  const rangeFloor = Math.min(...townRanges.map(range => range.min));
-  const rangeCeiling = Math.max(...townRanges.map(range => range.max));
-  return <>
-    <p className="ledger-intro">Estimated retail ranges and demand context before travel. Current seller offers appear only after arrival.</p>
-    <label className="ledger-filter">Commodity<select value={selectedGood} onChange={event => setSelectedGood(event.target.value as typeof selectedGood)}>
-      {GOODS.map(good => <option key={good.id} value={good.id}>{good.name}</option>)}
-    </select></label>
-    {state.phase === 'travel' && <section className="merchant-compass-workspace" aria-label="Merchant compass">
-      <div className="merchant-compass" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/destination-dial.webp)` }}>
-        {TOWNS.map(town => <button type="button" key={town.id} aria-pressed={selectedTownId === town.id}
-          className={`merchant-compass-town merchant-compass-${town.id}`} onClick={() => setSelectedTownId(town.id)}>
-          {town.name}
+  const visits = (state.journal ?? []).filter((event): event is Extract<JournalEvent, { type: 'townChosen' }> => event.type === 'townChosen');
+  const latestIssue = [...(state.newspapers ?? [])].sort((a, b) => b.day - a.day)[0]
+    ?? [...(state.journal ?? [])].reverse().find((event): event is Extract<JournalEvent, { type: 'newspaperIssued' }> => event.type === 'newspaperIssued')?.issue;
+  const matchingArticles = latestIssue?.articles.filter(article => article.relatedGood === selectedGood
+    || article.townId === selectedTownId
+    || article.effects.some(effect => ('goodId' in effect && effect.goodId === selectedGood)
+      || ('townId' in effect && effect.townId === selectedTownId))) ?? [];
+  const news = matchingArticles.length ? matchingArticles : latestIssue?.articles.slice(0, 2) ?? [];
+  return <div className="market-explorer">
+    <section className="market-good-picker" aria-label="Choose a commodity">
+      <span className="market-section-label">Compare commodity</span>
+      <div className="market-good-options" role="group" aria-label="Commodities">
+        {GOODS.map(good => <button type="button" key={good.id} aria-pressed={selectedGood === good.id}
+          className={selectedGood === good.id ? 'selected' : ''} onClick={() => setSelectedGood(good.id)}>
+          <img src={`${import.meta.env.BASE_URL}shop-art/good-${good.id}.webp`} alt=""/><span>{good.name}</span>
         </button>)}
       </div>
-      <div className="merchant-route-preview">
-        <div className="town-window-preview" role="img" aria-label={`${selectedTown.name} vista`} style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/town-${selectedTown.id}.webp)` }} />
-        <div><h3>{selectedTown.name}</h3><p>{selectedTown.specialty}</p>
-          <button className="primary" type="button" disabled={busy || !online}
-            onClick={() => send({ type: 'chooseTown', townId: selectedTown.id })}>Travel to {selectedTown.name}</button>
+    </section>
+    <div className="market-explorer-panels">
+      <section className="market-compass-card ledger-chart-card" aria-label="Choose a town">
+        <h3>Merchant compass</h3>
+        <div className="market-compass-body">
+          <div className="merchant-compass" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/destination-dial.webp)` }}>
+            {TOWNS.map(town => <button type="button" key={town.id} aria-pressed={selectedTownId === town.id}
+              className={`merchant-compass-town merchant-compass-${town.id}`} onClick={() => setSelectedTownId(town.id)}>{town.name}</button>)}
+          </div>
+          <div className="market-route-card">
+            <img src={`${import.meta.env.BASE_URL}shop-art/town-${selectedTown.id}.webp`} alt=""/>
+            <div><strong>{selectedTown.name}</strong><small>{selectedTown.specialty}</small>
+              <button className="primary" type="button" disabled={busy || !online || state.phase !== 'travel'}
+                onClick={() => send({ type: 'chooseTown', townId: selectedTown.id })}>{state.phase === 'travel' ? `Travel to ${selectedTown.name}` : selectedTown.name}</button>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>}
-    <div className="market-explorer-grid">{TOWNS.map(town => {
-      const range = priceRange(town, selectedGood);
-      const held = quantity(state, selectedGood);
-      const demand = town.demand[selectedGood];
-      return <article className={`market-town ${currentTown?.id === town.id ? 'selected' : ''}`} key={town.id}>
-        <h3>{town.name}</h3><p>{town.specialty}</p>
-        <dl><dt>Estimated retail</dt><dd>{range.min}–{range.max}g</dd><dt>Demand index</dt><dd>{demand.toFixed(1)}×</dd><dt>Held stock</dt><dd>{held}</dd></dl>
-        {state.phase === 'travel' && <button type="button" aria-pressed={selectedTownId === town.id}
-          onClick={() => setSelectedTownId(town.id)}>Preview {town.name}</button>}
-      </article>;
-    })}</div>
-    <section className="market-range-panel"><h3>{goodName(selectedGood)} · estimated retail by town</h3><div className="market-range-rows">{TOWNS.map(town => {
-      const range = priceRange(town, selectedGood);
-      const visit = [...(state.journal ?? [])].reverse().find((event): event is Extract<JournalEvent, {type:'townChosen'}> => event.type === 'townChosen' && event.townId === town.id);
-      const record = visit?.market.find(item => item.goodId === selectedGood);
-      const width = Math.max(0, rangeCeiling - rangeFloor);
-      return <div key={town.id}><span>{town.name}</span><i><b style={{ left: `${width ? (range.min-rangeFloor)/width*100 : 0}%`, width: `${width ? (range.max-range.min)/width*100 : 100}%` }}/></i><strong>{range.min}–{range.max}g</strong><small>{record?.wholesalePrice === null || record?.wholesalePrice === undefined ? 'Wholesale not recorded' : `Last wholesale ${money(record.wholesalePrice)} · Day ${visit?.day}`}</small></div>;
-    })}</div></section>
-    <h3>Commodity comparison</h3>
-    <div className="ledger-table market-matrix" role="table" aria-label="Estimated retail by town and good">
-      <div role="row" className="ledger-table-head"><span role="columnheader">Good</span>{TOWNS.map(town => <span role="columnheader" key={town.id}>{town.name}</span>)}</div>
-      {GOODS.map(good => <div role="row" key={good.id}><span role="cell">{good.name}</span>{TOWNS.map(town => {
-        const range = priceRange(town, good.id);
-        return <span role="cell" key={town.id}>{range.min}–{range.max}g</span>;
-      })}</div>)}
+      </section>
+      <section className="market-town-prices ledger-chart-card" aria-label={`Estimated ${goodName(selectedGood)} prices by town`}>
+        <h3>Prices by town <small>estimated retail</small></h3>
+        <div className="market-price-table" role="table" aria-label={`Retail price range for ${goodName(selectedGood)}`}>
+          <div role="row" className="market-price-head"><span>Good</span>{TOWNS.map(town => <span key={town.id}>{town.name}</span>)}</div>
+          <div role="row"><span><img src={`${import.meta.env.BASE_URL}shop-art/good-${selectedGood}.webp`} alt=""/>{goodName(selectedGood)}</span>
+            {TOWNS.map(town => { const range = priceRange(town, selectedGood); return <span key={town.id}>{range.min}–{range.max}g</span>; })}
+          </div>
+        </div>
+        <div className="market-demand-row"><span>Local demand</span>{TOWNS.map(town => <strong key={town.id}>{town.demand[selectedGood].toFixed(1)}×</strong>)}</div>
+      </section>
+      <section className="market-history-card ledger-chart-card" aria-label={`${goodName(selectedGood)} prices across towns`}>
+        <div className="market-panel-title"><h3>{goodName(selectedGood)} price by town</h3><span><i className="market-legend-observed"/>Recorded buyer range midpoint <i className="market-legend-estimate"/>Current retail estimate</span></div>
+        <MarketPriceChart visits={visits} goodId={selectedGood} day={state.day}/>
+      </section>
+      <section className="market-gazette-card ledger-chart-card" aria-label="Relevant Gazette news">
+        <h3><span aria-hidden="true">▤</span> Gazette <small>{latestIssue ? `Day ${latestIssue.day}` : 'No edition yet'}</small></h3>
+        {!news.length ? <p className="market-no-news">Gazette reports for this campaign will appear here.</p> : <div className="market-news-list">{news.slice(0, 3).map(article => {
+          const relatedTown = TOWNS.find(town => town.id === article.townId);
+          const image = article.relatedGood ? `good-${article.relatedGood}.webp` : relatedTown ? `town-${relatedTown.id}.webp` : `good-${selectedGood}.webp`;
+          return <article key={article.id}><img src={`${import.meta.env.BASE_URL}shop-art/${image}`} alt=""/><div><strong>{article.headline}</strong><p>{article.body}</p></div></article>;
+        })}</div>}
+      </section>
     </div>
-  </>;
+    <div className="market-selection-footer"><span>Carried {goodName(selectedGood)}: {quantity(state, selectedGood)} units</span><span>Selected destination: <strong>{selectedTown.name}</strong></span></div>
+  </div>;
+}
+
+function MarketPriceChart({ visits, goodId, day }: { visits: Extract<JournalEvent, { type: 'townChosen' }>[]; goodId: GoodId; day: number }) {
+  const series = TOWNS.map((town, index) => {
+    const actual = visits.filter(visit => visit.townId === town.id).flatMap(visit => {
+      const record = visit.market.find(item => item.goodId === goodId);
+      return record ? [{ day: visit.day, value: (record.buyerMin + record.buyerMax) / 2, min: record.buyerMin, max: record.buyerMax }] : [];
+    }).sort((a, b) => a.day - b.day);
+    const estimate = priceRange(town, goodId);
+    return { town, color: ['#47744c', '#bd8736', '#a34f47'][index], actual, estimate: (estimate.min + estimate.max) / 2, range: estimate };
+  });
+  const allPrices = series.flatMap(item => [...item.actual.flatMap(point => [point.min, point.max]), item.range.min, item.range.max]);
+  const low = Math.min(...allPrices), high = Math.max(...allPrices);
+  const maxDay = Math.max(1, day, ...visits.map(visit => visit.day));
+  const x = (value: number) => 34 + (value - 1) / Math.max(1, maxDay - 1) * 520;
+  const y = (value: number) => 158 - (value - low) / Math.max(1, high - low) * 126;
+  const ticks = [...new Set([low, Math.round((low + high) / 2), high])];
+  return <div className="market-price-chart"><svg viewBox="0 0 580 190" role="img" aria-label={`${goodName(goodId)} estimated retail price ranges and recorded observations across all towns`}>
+    {ticks.map((tick, index) => <g key={`${tick}-${index}`}><line x1="34" x2="554" y1={y(tick)} y2={y(tick)} className="market-chart-gridline"/><text x="28" y={y(tick) + 4} textAnchor="end">{tick}g</text></g>)}
+    {Array.from({ length: Math.min(maxDay, 7) }, (_, index) => {
+      const tickDay = maxDay <= 7 ? index + 1 : Math.round(1 + index * (maxDay - 1) / 6);
+      return <g key={tickDay}><line x1={x(tickDay)} x2={x(tickDay)} y1="32" y2="160" className="market-chart-vertical"/><text x={x(tickDay)} y="179" textAnchor="middle">Day {tickDay}</text></g>;
+    })}
+    {series.map(item => {
+      const observed = item.actual.map(point => `${x(point.day)},${y(point.value)}`).join(' ');
+      const last = item.actual.at(-1);
+      const estimate = `${x(day)},${y(item.estimate)}`;
+      const estimatedPath = last ? `${x(last.day)},${y(last.value)} ${estimate}` : estimate;
+      return <g key={item.town.id}>
+        {item.actual.length > 1 && <polyline points={observed} fill="none" stroke={item.color} strokeWidth="2.5"/>}
+        {last && <polyline points={estimatedPath} fill="none" stroke={item.color} strokeWidth="2" strokeDasharray="5 5" opacity=".8"/>}
+        {item.actual.map((point, index) => <g key={`${point.day}-${index}`}><line x1={x(point.day)} x2={x(point.day)} y1={y(point.min)} y2={y(point.max)} stroke={item.color} strokeWidth="3" opacity=".45"/><circle cx={x(point.day)} cy={y(point.value)} r="3.6" fill={item.color}><title>{item.town.name}, Day {point.day}: observed buyer range {point.min}–{point.max}g</title></circle></g>)}
+        <circle cx={x(day)} cy={y(item.estimate)} r="4" fill="#f3e4c6" stroke={item.color} strokeWidth="2.5"><title>{item.town.name}: current estimated retail {item.range.min}–{item.range.max}g</title></circle>
+      </g>;
+    })}
+  </svg><div className="market-chart-town-legend">{series.map(item => <span key={item.town.id}><i style={{ backgroundColor: item.color }}/>{item.town.name}</span>)}</div></div>;
 }
 
 function PerformancePage({ state }: PageContext) {
@@ -453,7 +499,7 @@ export function Ledger({ campaign, page, setPage, close, send, busy, online, pen
         {pages.map(item => <button type="button" key={item.id} className={page === item.id ? 'active' : ''}
           aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span aria-hidden="true">{navGlyph(item.id)}</span>{item.title}</button>)}
       </nav>
-      <div className="ledger-content" key={page}><div className="ledger-page-heading"><div><span className="ledger-page-kicker">Day {campaign.state.day} · {campaign.state.phase}</span><h2>{selected.title}</h2></div><span className="ledger-page-gold">{money(campaign.state.gold)} available</span></div>{selected.render({ state: campaign.state, send, busy, online, pending })}</div>
+      <div className={`ledger-content${page === 'markets' ? ' markets-ledger-content' : ''}`} key={page}><div className="ledger-page-heading"><div><span className="ledger-page-kicker">Day {campaign.state.day} · {campaign.state.phase}</span><h2>{selected.title}</h2></div><span className="ledger-page-gold">{money(campaign.state.gold)} available</span></div>{selected.render({ state: campaign.state, send, busy, online, pending })}</div>
       </div>
       <footer className="ledger-book-footer"><span>Campaign record · Revision {campaign.revision}</span>
         {campaign.state.phase === 'report'
