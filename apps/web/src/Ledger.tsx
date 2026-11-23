@@ -186,9 +186,15 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
     <div className="market-explorer-panels">
       <section className="market-compass-card ledger-chart-card" aria-label="Choose a town">
         <h3>Merchant compass</h3>
-        <div className="merchant-compass" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/destination-dial.webp)` }}>
+        <div className="merchant-compass" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}shop-art/destination-dial-hd.webp)` }}>
+          <svg className={`merchant-compass-needle needle-${selectedTownId}`} viewBox="0 0 640 298" aria-hidden="true">
+            <path d="M320 255 L309 97 L320 72 L331 97 Z" fill="#855528" stroke="#4d301d" strokeWidth="3" strokeLinejoin="round"/>
+            <path d="M320 249 L314 99 L320 80 L326 99 Z" fill="#f4d27e" stroke="#fff0ba" strokeWidth="1.2" strokeLinejoin="round"/>
+            <circle cx="320" cy="253" r="6" fill="#f0cf78" stroke="#68451f" strokeWidth="2"/>
+          </svg>
           {TOWNS.map(town => <button type="button" key={town.id} aria-pressed={selectedTownId === town.id}
-            className={`merchant-compass-town merchant-compass-${town.id}`} onClick={() => setSelectedTownId(town.id)}>{town.name}</button>)}
+            aria-label={`Select ${town.name}`}
+            className={`merchant-compass-town merchant-compass-${town.id}`} onClick={() => setSelectedTownId(town.id)}><span className="sr-only">{town.name}</span></button>)}
         </div>
       </section>
       <section className="market-town-prices ledger-chart-card" aria-label="Select a commodity and compare estimated prices by town">
