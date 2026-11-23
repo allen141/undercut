@@ -212,9 +212,9 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
       <section className="market-town-prices ledger-chart-card" aria-label={`Estimated ${goodName(selectedGood)} prices by town`}>
         <h3>Prices by town <small>estimated retail</small></h3>
         <div className="market-price-table" role="table" aria-label={`Retail price range for ${goodName(selectedGood)}`}>
-          <div role="row" className="market-price-head"><span>Good</span>{TOWNS.map(town => <span key={town.id}>{town.name}</span>)}</div>
-          <div role="row"><span><img src={`${import.meta.env.BASE_URL}shop-art/good-${selectedGood}.webp`} alt=""/>{goodName(selectedGood)}</span>
-            {TOWNS.map(town => { const range = priceRange(town, selectedGood); return <span key={town.id}>{range.min}–{range.max}g</span>; })}
+          <div role="row" className="market-price-head"><span role="columnheader">Good</span>{TOWNS.map(town => <span role="columnheader" key={town.id}>{town.name}</span>)}</div>
+          <div role="row"><span role="rowheader"><img src={`${import.meta.env.BASE_URL}shop-art/good-${selectedGood}.webp`} alt=""/>{goodName(selectedGood)}</span>
+            {TOWNS.map(town => { const range = priceRange(town, selectedGood); return <span role="cell" key={town.id}>{range.min}–{range.max}g</span>; })}
           </div>
         </div>
         <div className="market-demand-row"><span>Local demand</span>{TOWNS.map(town => <strong key={town.id}>{town.demand[selectedGood].toFixed(1)}×</strong>)}</div>
@@ -225,6 +225,10 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
       </section>
       <section className="market-gazette-card ledger-chart-card" aria-label="Relevant Gazette news">
         <h3><span aria-hidden="true">▤</span> Gazette <small>{latestIssue ? `Day ${latestIssue.day}` : 'No edition yet'}</small></h3>
+        {latestIssue?.outlook.find(row => row.goodId === selectedGood) && (() => {
+          const outlook = latestIssue.outlook.find(row => row.goodId === selectedGood)!;
+          return <div className="market-gazette-outlook"><span>{goodName(selectedGood)} wholesale outlook</span><strong>{outlook.current.toFixed(1)}g</strong><small>{outlook.change > 0 ? '+' : ''}{outlook.change.toFixed(1)}g today · next estimate {outlook.projected.toFixed(1)}g</small></div>;
+        })()}
         {!news.length ? <p className="market-no-news">Gazette reports for this campaign will appear here.</p> : <div className="market-news-list">{news.slice(0, 3).map(article => {
           const relatedTown = TOWNS.find(town => town.id === article.townId);
           const image = article.relatedGood ? `good-${article.relatedGood}.webp` : relatedTown ? `town-${relatedTown.id}.webp` : `good-${selectedGood}.webp`;
