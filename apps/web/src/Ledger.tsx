@@ -143,14 +143,16 @@ function MerchandisingPage({ state, send, busy, online }: PageContext) {
       const displayed = state.displayStock?.[slot] ?? 0;
       const reserve = goodId ? Math.max(0, quantity(state, goodId) - displayed) : 0;
       const range = goodId && townId ? priceRange(TOWNS.find(item => item.id === townId)!, goodId as GoodId) : null;
+      const artId = goodId && GOODS.find(good => good.id === goodId)?.id;
       return <article className="ledger-display" key={slot}>
         <h3>{slot === 3 ? 'Window display' : `Floor display ${slot + 1}`}</h3>
+        {goodId && <div className="ledger-display-good"><img src={`${import.meta.env.BASE_URL}shop-art/good-${artId}.webp`} alt=""/><strong>{goodName(goodId)}</strong></div>}
         {state.phase === 'prepare' && <>
           <label>Good<select value={goodId ?? ''} disabled={busy || !online} onChange={event => setGoods(current => current.map((value, index) => index === slot ? event.target.value || null : value))}>
             <option value="">Empty</option>{choices.map(good => <option key={good.id} value={good.id} disabled={goods.some((value, index) => index !== slot && value === good.id)}>{good.name} · {quantity(state, good.id)} in stock</option>)}
           </select></label>
           {goodId && <fieldset className="price-presets"><legend>Daily price</legend>{([80, 100, 120] as const).map(preset => <label key={preset}><input type="radio" name={`preset-${slot}`} checked={presets[slot] === preset} onChange={() => setPresets(current => current.map((value, index) => index === slot ? preset : value))} />{preset}%</label>)}</fieldset>}
-          {price !== null && <p className="display-price">{money(price)} <span>Budget estimate {range?.min}–{range?.max}g</span></p>}
+          {price !== null && <><p className="display-price">{money(price)} <span>Buyer budget {range?.min}–{range?.max}g</span></p><div className="display-range" aria-label={`Buyer budget range ${range?.min} to ${range?.max} gold`}><span>{range?.min}g</span><i><b style={{ left: `${presets[slot] === 80 ? 0 : presets[slot] === 100 ? 50 : 100}%` }}/></i><span>{range?.max}g</span></div></>}
         </>}
         {state.phase !== 'prepare' && <p>{shelf.goodId ? goodName(shelf.goodId) : 'Empty'} · {shelf.goodId ? money(shelf.price) : '—'}</p>}
         {state.phase === 'open' && shelf.goodId && <>
@@ -172,6 +174,9 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
   const currentTown = TOWNS.find(town => town.id === state.townId);
   const [selectedTownId, setSelectedTownId] = useState(currentTown?.id ?? TOWNS[0].id);
   const selectedTown = TOWNS.find(town => town.id === selectedTownId) ?? TOWNS[0];
+  const townRanges = TOWNS.map(town => priceRange(town, selectedGood));
+  const rangeFloor = Math.min(...townRanges.map(range => range.min));
+  const rangeCeiling = Math.max(...townRanges.map(range => range.max));
   return <>
     <p className="ledger-intro">Estimated retail ranges and demand context before travel. Current seller offers appear only after arrival.</p>
     <label className="ledger-filter">Commodity<select value={selectedGood} onChange={event => setSelectedGood(event.target.value as typeof selectedGood)}>
@@ -203,6 +208,13 @@ function MarketExplorer({ state, send, busy, online }: PageContext) {
           onClick={() => setSelectedTownId(town.id)}>Preview {town.name}</button>}
       </article>;
     })}</div>
+    <section className="market-range-panel"><h3>{goodName(selectedGood)} · estimated retail by town</h3><div className="market-range-rows">{TOWNS.map(town => {
+      const range = priceRange(town, selectedGood);
+      const visit = [...(state.journal ?? [])].reverse().find((event): event is Extract<JournalEvent, {type:'townChosen'}> => event.type === 'townChosen' && event.townId === town.id);
+      const record = visit?.market.find(item => item.goodId === selectedGood);
+      const width = Math.max(0, rangeCeiling - rangeFloor);
+      return <div key={town.id}><span>{town.name}</span><i><b style={{ left: `${width ? (range.min-rangeFloor)/width*100 : 0}%`, width: `${width ? (range.max-range.min)/width*100 : 100}%` }}/></i><strong>{range.min}–{range.max}g</strong><small>{record?.wholesalePrice === null || record?.wholesalePrice === undefined ? 'Wholesale not recorded' : `Last wholesale ${money(record.wholesalePrice)} · Day ${visit?.day}`}</small></div>;
+    })}</div></section>
     <h3>Commodity comparison</h3>
     <div className="ledger-table market-matrix" role="table" aria-label="Estimated retail by town and good">
       <div role="row" className="ledger-table-head"><span role="columnheader">Good</span>{TOWNS.map(town => <span role="columnheader" key={town.id}>{town.name}</span>)}</div>
@@ -249,7 +261,12 @@ function PerformancePage({ state }: PageContext) {
       return counts;
     }, {});
   const max = Math.max(1, ...history.map(day => day.revenue));
-  const selected = history.find(day => day.day === selectedDay);
+  const selected = history.find(day => day.day === selectedDay) ?? history.at(-1);
+  const missedByGood = GOODS.map(good => ({
+    good, sold: history.reduce((sum, day) => sum + (day.customerResults ?? []).filter(result => result.goodId === good.id && result.price !== null).length, 0),
+    missed: history.reduce((sum, day) => sum + (day.customerResults ?? []).filter(result => result.goodId === good.id && result.price === null).length, 0),
+  })).filter(row => row.sold || row.missed);
+  const recent = history.slice(-7);
   return <>
     <p className="ledger-intro">Recorded trading results. Cash flow, cost of goods sold, and profit are separate measures.</p>
     <label className="ledger-filter">Town filter<select value={townFilter} onChange={event => setTownFilter(event.target.value)}>
@@ -262,6 +279,30 @@ function PerformancePage({ state }: PageContext) {
       <div><span>Units sold</span><strong>{total.sold}</strong></div>
     </div>
     {!history.length ? <p className="ledger-empty">Close your first shop day to begin tracking performance.</p> : <>
+      <div className="ledger-dashboard-grid">
+        <section className="ledger-chart-card ledger-cash-chart"><h3>Cash flow by day</h3>
+          <div className="ledger-cash-bars">{history.map(day => {
+            const before = state.history.filter(item => item.day < day.day);
+            const start = day.startingGold ?? 100 + before.reduce((sum, item) => sum + item.revenue - item.purchases, 0);
+            const end = day.endingGold ?? start - day.purchases + day.revenue;
+            const scale = Math.max(1, ...history.map(item => item.endingGold ?? item.startingGold ?? 100), end);
+            return <button type="button" key={day.day} onClick={() => setSelectedDay(day.day)} className={selectedDay === day.day ? 'selected' : ''} aria-label={`Day ${day.day}: start ${start} gold, purchases ${day.purchases}, sales ${day.revenue}, end ${end}`}>
+              <span className="cash-bar-stack"><i style={{ height: `${Math.max(4, start / scale * 100)}%` }} /><b style={{ height: `${Math.max(4, day.revenue / scale * 100)}%` }} /><em style={{ height: `${Math.max(4, day.purchases / scale * 100)}%` }} /></span><small>D{day.day}</small>
+            </button>;
+          })}</div><p className="chart-legend"><i/>Opening <b/>Sales <em/>Purchases</p>
+        </section>
+        <section className="ledger-chart-card"><h3>Sales and missed sales</h3>
+          {!missedByGood.length ? <p className="ledger-empty">Customer detail is not available for these days.</p> : <div className="ledger-outcome-bars">{missedByGood.map(row => {
+            const maxCount = Math.max(1, ...missedByGood.map(item => item.sold + item.missed));
+            return <div key={row.good.id}><span>{row.good.name}</span><div><i style={{ width: `${row.sold / maxCount * 100}%` }}/><b style={{ width: `${row.missed / maxCount * 100}%` }}/></div><small>{row.sold} sold · {row.missed} missed</small></div>;
+          })}</div>}
+          <p className="chart-legend"><i/>Sold <b/>Missed</p>
+        </section>
+        <section className="ledger-chart-card ledger-profit-chart"><h3>Recent profit</h3><ProfitSparkline days={recent}/></section>
+        <section className="ledger-chart-card"><h3>Missed sale reasons</h3>
+          {!Object.keys(missedResults).length ? <p className="ledger-empty">No recorded missed customer sales.</p> : <div className="ledger-reasons">{Object.entries(missedResults).sort((a,b) => b[1]-a[1]).map(([reason,count]) => <div key={reason}><span>{reason.replace(/([A-Z])/g, ' $1')}</span><i><b style={{ width: `${count / Math.max(...Object.values(missedResults)) * 100}%` }}/></i><strong>{count}</strong></div>)}</div>}
+        </section>
+      </div>
       <section className="performance-chart" aria-label="Daily revenue and profit chart">
         <h3>Revenue and profit by day</h3><div className="performance-bars">{history.map(day => <button type="button" key={day.day}
           className={selectedDay === day.day ? 'selected' : ''} onClick={() => setSelectedDay(day.day)}
@@ -404,14 +445,16 @@ export function Ledger({ campaign, page, setPage, close, send, busy, online, pen
   }, [close]);
   return <div className="ledger-backdrop">
     <section ref={dialog} className="ledger-book" role="dialog" aria-modal="true" aria-labelledby="ledger-title" tabIndex={-1}>
-      <header className="ledger-book-header"><div><span className="ledger-kicker">{campaign.name} · Day {campaign.state.day}</span><h1 id="ledger-title">The shop ledger</h1></div>
-        <button type="button" onClick={close} aria-label="Continue trading">Continue</button>
+      <header className="ledger-book-header"><div><span className="ledger-kicker">{campaign.name} · Day {campaign.state.day} · {campaign.state.townId ? townName(campaign.state.townId) : 'Market route'}</span><h1 id="ledger-title">Undercut <small>Merchant ledger</small></h1></div>
+        <div className="ledger-header-actions"><strong>{money(campaign.state.gold)}</strong><button type="button" onClick={close} aria-label="Continue trading">Continue</button></div>
       </header>
+      <div className="ledger-workspace">
       <nav className="ledger-nav" aria-label="Ledger pages">
         {pages.map(item => <button type="button" key={item.id} className={page === item.id ? 'active' : ''}
-          aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}>{item.title}</button>)}
+          aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span aria-hidden="true">{navGlyph(item.id)}</span>{item.title}</button>)}
       </nav>
-      <div className="ledger-content" key={page}><h2>{selected.title}</h2>{selected.render({ state: campaign.state, send, busy, online, pending })}</div>
+      <div className="ledger-content" key={page}><div className="ledger-page-heading"><div><span className="ledger-page-kicker">Day {campaign.state.day} · {campaign.state.phase}</span><h2>{selected.title}</h2></div><span className="ledger-page-gold">{money(campaign.state.gold)} available</span></div>{selected.render({ state: campaign.state, send, busy, online, pending })}</div>
+      </div>
       <footer className="ledger-book-footer"><span>Campaign record · Revision {campaign.revision}</span>
         {campaign.state.phase === 'report'
           ? <button className="primary" type="button" disabled={busy || !online}
@@ -422,4 +465,15 @@ export function Ledger({ campaign, page, setPage, close, send, busy, online, pen
       </footer>
     </section>
   </div>;
+}
+
+function navGlyph(id: LedgerPageId) {
+  return ({ overview: '◈', markets: '⚖', suppliers: '▣', inventory: '▰', merchandising: '▤', performance: '▥', gazette: '▧', events: '≡', newspapers: '▧' })[id];
+}
+
+function ProfitSparkline({ days }: { days: State['history'] }) {
+  if (!days.length) return <p className="ledger-empty">No recorded profit yet.</p>;
+  const max = Math.max(1, ...days.map(day => day.profit));
+  const points = days.map((day,index) => `${index * (100 / Math.max(1,days.length - 1))},${92 - day.profit / max * 78}`).join(' ');
+  return <div className="ledger-sparkline"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Recent daily profit from ${days[0].profit} to ${days.at(-1)!.profit} gold`}><polyline points={points}/>{days.map((day,index) => <circle key={day.day} cx={index * (100 / Math.max(1,days.length - 1))} cy={92 - day.profit / max * 78} r="2.2"/> )}</svg><div>{days.map(day => <span key={day.day}>D{day.day}<b>{money(day.profit)}</b></span>)}</div></div>;
 }
