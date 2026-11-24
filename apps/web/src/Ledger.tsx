@@ -164,7 +164,10 @@ function SupplierWorkspace({ state, send, busy, online, pending }: PageContext) 
               <th scope="row"><button type="button" aria-pressed={offer?.id === row.id}
                 onClick={() => { setOfferId(row.id); setRequestedCount(1); }}>
                 <img src={shopArt(`good-${row.goodId}`)} alt="" />
-                <span>{goodName(row.goodId)}{deal && <small className="ledger-sale-badge">{deal}{saving > 0 && ` · Save ${money(saving)}`}</small>}</span>
+                <span>{goodName(row.goodId)}{deal && <small className={`supplier-deal supplier-deal--${row.kind}`}>
+                  <span className="supplier-deal-icon" aria-hidden="true">{row.kind === 'dailyDeal' ? '☀' : '★'}</span>
+                  <span><strong>{deal}</strong>{saving > 0 && <span className="supplier-deal-saving">Save {money(saving)}</span>}</span>
+                </small>}</span>
               </button></th>
               <td>{money(row.unitCost)}</td><td>{row.quantity}{rowLocked && <small>Tier {row.requiredTier}</small>}</td>
               <td>{money(retail)}</td><td className={margin < 0 ? 'negative' : 'positive'}>{margin > 0 ? '+' : ''}{margin}%</td>
