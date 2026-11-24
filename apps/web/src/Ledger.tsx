@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { DISPLAY_CAPACITY, GOODS, TOWNS, VENDORS, inventoryValue, priceForPreset, priceRange, quantity, type GoodId, type JournalEvent, type PricePreset, type State } from '@undercut/game-core';
+import { DISPLAY_CAPACITY, GOODS, MAX_VENDOR_VISITS, REPUTATION_TIERS, TOWNS, VENDORS, inventoryValue, priceForPreset, priceRange, quantity, reputationFor, vendorsInTown, type GoodId, type JournalEvent, type PricePreset, type State } from '@undercut/game-core';
 import type { Command } from '@undercut/contracts';
 import type { Campaign } from './App.js';
 
 export type LedgerPageId = 'overview' | 'markets' | 'suppliers' | 'inventory' | 'merchandising' | 'performance' | 'gazette' | 'events' | 'newspapers';
-type PageContext = { state: State; send: (command: Command) => void; busy: boolean; online: boolean; pending: boolean };
+type PageContext = { state: State; send: (command?: Command) => void; busy: boolean; online: boolean; pending: boolean };
 type LedgerPage = { id: LedgerPageId; title: string; render: (context: PageContext) => ReactNode };
 const goodName = (id: string) => GOODS.find(good => good.id === id)?.name ?? id;
 const townName = (id: string) => TOWNS.find(town => town.id === id)?.name ?? id;
@@ -58,48 +58,7 @@ const pages: LedgerPage[] = [
   </> },
   { id: 'performance', title: 'Performance', render: context => <PerformancePage {...context} /> },
   { id: 'markets', title: 'Markets', render: context => <MarketExplorer {...context} /> },
-  { id: 'suppliers', title: 'Suppliers', render: ({ state, send, busy, online, pending }) => <>
-    <p className="ledger-intro">Compare this town’s current offers before using one of your two vendor visits.</p>
-    <p>Visits used: {state.visitedVendorIds.length} of 2</p>
-    <div className="ledger-vendors">{VENDORS.filter(vendor => (state.vendorOffers[vendor.id] ?? []).length).map(vendor => {
-      const active = state.activeVendorId === vendor.id;
-      const visited = state.visitedVendorIds.includes(vendor.id);
-      const offers = state.vendorOffers[vendor.id] ?? [];
-      return <article className="ledger-vendor" key={vendor.id}>
-        <header><div><h3>{vendor.name}</h3><span>{state.vendorReputation[vendor.id]?.tier ?? 0} reputation tier</span></div>
-          {!active && <button disabled={busy || !online || state.phase !== 'prepare' || state.buyingComplete || visited || state.visitedVendorIds.length >= 2 || !!state.activeVendorId}
-            onClick={() => send({ type: 'visitVendor', vendorId: vendor.id })}>{visited ? 'Visited' : 'Begin visit'}</button>}
-          {active && <button disabled={busy || !online} onClick={() => send({ type: 'leaveVendor' })}>End visit</button>}
-        </header>
-        <div className="ledger-offers" role="list" aria-label={`${vendor.name} offers`}>
-          {offers.map(offer => {
-            const isSale = offer.kind !== 'regular';
-            const locked = (offer.requiredTier ?? 0) > (state.vendorReputation[vendor.id]?.tier ?? 0);
-            const regularPrice = offers.find(candidate =>
-              candidate.kind === 'regular' && candidate.goodId === offer.goodId)?.unitCost;
-            const saving = regularPrice === undefined ? 0 : Math.max(0, regularPrice - offer.unitCost);
-            const stock = locked ? `Tier ${offer.requiredTier} required`
-              : offer.quantity > 0 ? `${offer.quantity} available` : 'Sold out';
-            return <div role="listitem" key={offer.id}>
-              <button type="button" className={`ledger-offer${isSale ? ' on-sale' : ''}`}
-                aria-label={`Buy 1 ${goodName(offer.goodId)}${isSale ? ` · ${offer.kind === 'dailyDeal' ? 'daily deal' : 'reputation deal'}` : ''} for ${money(offer.unitCost)} · ${stock}`}
-                disabled={!active || busy || pending || !online || state.phase !== 'prepare' || state.buyingComplete
-                  || locked || offer.quantity < 1 || state.gold < offer.unitCost}
-                onClick={() => send({ type: 'buy', offerId: offer.id, quantity: 1 })}>
-                <span className="ledger-offer-name">{goodName(offer.goodId)}
-                  {isSale && <small className="ledger-sale-badge">{offer.kind === 'dailyDeal' ? 'Daily deal' : `Reputation deal · Tier ${offer.requiredTier}`}{saving > 0 ? ` · Save ${money(saving)}` : ''}</small>}
-                </span>
-                <span className="ledger-offer-price">{money(offer.unitCost)} <small>per item</small></span>
-                <span className="ledger-offer-stock">{stock}<small>Tap item to buy 1</small></span>
-              </button>
-            </div>;
-          })}
-        </div>
-      </article>;
-    })}</div>
-    {state.phase === 'prepare' && !state.buyingComplete && <button className="primary" disabled={busy || !online}
-      onClick={() => send({ type: 'finishBuying' })}>Finish buying and prepare displays</button>}
-  </> },
+  { id: 'suppliers', title: 'Suppliers', render: context => <SupplierWorkspace key={context.state.day} {...context} /> },
   { id: 'merchandising', title: 'Merchandising', render: context => <MerchandisingPage {...context} /> },
   { id: 'events', title: 'Events', render: ({ state }) => {
     const events = state.journal ?? [];
@@ -129,6 +88,124 @@ const pages: LedgerPage[] = [
     </article>)}</div>;
   } },
 ];
+
+const supplierSpecialties = {
+  bargain: 'Bulk bargains',
+  generalist: 'Wide selection',
+  specialist: 'Specialty goods',
+};
+const shopArt = (name: string) => `${import.meta.env.BASE_URL}shop-art/${name}.webp`;
+
+function SupplierWorkspace({ state, send, busy, online, pending }: PageContext) {
+  const town = TOWNS.find(item => item.id === state.townId);
+  const vendors = vendorsInTown(state.townId);
+  const activeVendor = vendors.find(vendor => vendor.id === state.activeVendorId);
+  const [vendorId, setVendorId] = useState<string | undefined>(activeVendor?.id);
+  const [offerId, setOfferId] = useState<string>();
+  const [requestedCount, setRequestedCount] = useState(1);
+  const vendor = vendors.find(item => item.id === vendorId) ?? activeVendor ?? vendors[0];
+  const visitsLeft = MAX_VENDOR_VISITS - state.visitedVendorIds.length;
+  const buying = state.phase === 'prepare' && !state.buyingComplete;
+  const blocked = busy || !online || pending;
+
+  if (!town || !vendor) return <><h2>Supplier workspace</h2><p className="ledger-empty">Choose a town in Markets to see its suppliers.</p></>;
+
+  const offers = state.vendorOffers[vendor.id] ?? [];
+  const offer = offers.find(item => item.id === offerId) ?? offers.find(item => item.kind === 'regular' && item.quantity > 0) ?? offers[0];
+  const reputation = reputationFor(state, vendor.id);
+  const nextTier = REPUTATION_TIERS[reputation.tier + 1];
+  const visiting = activeVendor?.id === vendor.id;
+  const visited = state.visitedVendorIds.includes(vendor.id);
+  const locked = !!offer && reputation.tier < (offer.requiredTier ?? 0);
+  const limit = offer && !locked ? Math.min(99, offer.quantity, Math.floor(state.gold / offer.unitCost)) : 0;
+  const count = Math.max(1, Math.min(requestedCount, limit));
+  const subtotal = (offer?.unitCost ?? 0) * count;
+  const owned = offer ? quantity(state, offer.goodId) : 0;
+  const status = !buying ? 'Buying is closed for today.' : !offer ? 'No offers from this supplier.'
+    : locked ? `Tier ${offer.requiredTier} required.` : offer.quantity === 0 ? 'Sold out.'
+    : limit === 0 ? 'Not enough gold.' : !visiting ? 'Begin a visit to buy this offer.' : '';
+
+  return <div className="supplier-workspace">
+    <header className="supplier-banner ledger-chart-card">
+      <img src={shopArt(`town-${town.id}`)} alt="" />
+      <h2>Supplier Workspace <span>· {town.name}</span></h2>
+      <strong className="supplier-visits">Visits remaining: {visitsLeft}</strong>
+    </header>
+    <div className="supplier-vendors" aria-label="Compare suppliers">
+      {vendors.map(item => {
+        const comparable = (state.vendorOffers[item.id] ?? []).find(candidate =>
+          candidate.goodId === offer?.goodId && candidate.kind === 'regular');
+        const visitStatus = item.id === activeVendor?.id ? 'In visit' : state.visitedVendorIds.includes(item.id) ? 'Visited' : null;
+        return <button type="button" className="supplier-vendor" key={item.id} aria-pressed={item.id === vendor.id}
+          onClick={() => {
+            if (item.id === vendor.id) return;
+            setVendorId(item.id);
+            setOfferId(comparable?.id);
+            setRequestedCount(1);
+          }}>
+          <strong><img src={shopArt(`good-${item.goods[0]}`)} alt="" />{item.name}</strong>
+          <small>{supplierSpecialties[item.archetype]}{visitStatus && ` · ${visitStatus}`}</small>
+          <span>{comparable ? `Regular ${goodName(comparable.goodId)} · ${money(comparable.unitCost)} · ${comparable.quantity} in stock` : 'No regular quote for this good'}</span>
+        </button>;
+      })}
+    </div>
+    <div className="supplier-details">
+      <section className="supplier-quotes ledger-chart-card" aria-label={`${vendor.name} offers`}>
+        <table>
+          <thead><tr><th scope="col">Good</th><th scope="col">Price</th><th scope="col">Stock</th><th scope="col">Est. retail</th><th scope="col">Margin</th></tr></thead>
+          <tbody>{offers.map(row => {
+            const retail = priceForPreset(town.id, row.goodId, 100);
+            const margin = Math.round((retail - row.unitCost) / retail * 100);
+            const regular = offers.find(item => item.kind === 'regular' && item.goodId === row.goodId);
+            const saving = regular ? regular.unitCost - row.unitCost : 0;
+            const deal = row.kind === 'dailyDeal' ? 'Daily deal' : row.kind === 'reputationDeal' ? 'Reputation deal' : null;
+            const rowLocked = reputation.tier < (row.requiredTier ?? 0);
+            return <tr key={row.id} className={offer?.id === row.id ? 'selected' : undefined}>
+              <th scope="row"><button type="button" aria-pressed={offer?.id === row.id}
+                onClick={() => { setOfferId(row.id); setRequestedCount(1); }}>
+                <img src={shopArt(`good-${row.goodId}`)} alt="" />
+                <span>{goodName(row.goodId)}{deal && <small className="ledger-sale-badge">{deal}{saving > 0 && ` · Save ${money(saving)}`}</small>}</span>
+              </button></th>
+              <td>{money(row.unitCost)}</td><td>{row.quantity}{rowLocked && <small>Tier {row.requiredTier}</small>}</td>
+              <td>{money(retail)}</td><td className={margin < 0 ? 'negative' : 'positive'}>{margin > 0 ? '+' : ''}{margin}%</td>
+            </tr>;
+          })}</tbody>
+        </table>
+        <p>Retail uses the local buyer budget midpoint. Margin is a share of estimated retail.</p>
+      </section>
+      <section className="supplier-order ledger-chart-card" aria-label="Purchase details">
+        <div className="supplier-order-title">
+          {offer && <img src={shopArt(`good-${offer.goodId}`)} alt="" />}
+          <div><h3>{vendor.name}</h3><small>Tier {reputation.tier} · {money(reputation.spent)} spent
+            {nextTier && ` / ${money(nextTier.threshold)} for next tier`}</small></div>
+        </div>
+        {offer && <dl><dt>Good</dt><dd>{goodName(offer.goodId)}</dd><dt>Unit price</dt><dd>{money(offer.unitCost)}</dd><dt>Available stock</dt><dd>{offer.quantity}</dd></dl>}
+        {status && <p>{status}</p>}
+        {buying && activeVendor && <button type="button" disabled={blocked} onClick={() => send({ type: 'leaveVendor' })}>End visit with {activeVendor.name}</button>}
+        {buying && !activeVendor && <button type="button" disabled={blocked || visited || visitsLeft <= 0}
+          onClick={() => send({ type: 'visitVendor', vendorId: vendor.id })}>
+          {visited ? 'Already visited today' : visitsLeft <= 0 ? 'No visits remaining' : 'Begin visit'}
+        </button>}
+        {buying && visiting && offer && <div className="supplier-order-actions">
+          <span>Quantity</span><div className="supplier-stepper" role="group" aria-label="Purchase quantity">
+            <button type="button" aria-label="Decrease quantity" disabled={blocked || count <= 1} onClick={() => setRequestedCount(count - 1)}>−</button>
+            <output aria-label="Quantity">{count}</output>
+            <button type="button" aria-label="Increase quantity" disabled={blocked || count >= limit} onClick={() => setRequestedCount(count + 1)}>+</button>
+          </div>
+          <strong>Subtotal {limit > 0 ? money(subtotal) : '—'}</strong>
+          <button type="button" className="primary" disabled={blocked || limit <= 0}
+            onClick={() => { setOfferId(offer.id); send({ type: 'buy', offerId: offer.id, quantity: count }); }}>Buy</button>
+        </div>}
+      </section>
+    </div>
+    {buying && <div className="supplier-footer">
+      <span>{visiting && offer && limit > 0 ? <>After buy · {goodName(offer.goodId)} {owned} → {owned + count} · Gold {money(state.gold)} → {money(state.gold - subtotal)}</> : `Gold ${money(state.gold)}`}</span>
+      {pending
+        ? <button className="primary" type="button" disabled={busy || !online} onClick={() => send()}>Confirm pending action</button>
+        : <button className="primary" type="button" disabled={blocked} onClick={() => send({ type: 'finishBuying' })}>Finish buying</button>}
+    </div>}
+  </div>;
+}
 
 function MerchandisingPage({ state, send, busy, online }: PageContext) {
   const [goods, setGoods] = useState<(string | null)[]>(state.shelves.map(shelf => shelf.goodId));
@@ -496,7 +573,7 @@ export function Ledger({ campaign, page, setPage, close, send, busy, online, pen
         {pages.map(item => <button type="button" key={item.id} className={page === item.id ? 'active' : ''}
           aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><span aria-hidden="true">{navGlyph(item.id)}</span>{item.title}</button>)}
       </nav>
-      <div className={`ledger-content${page === 'markets' ? ' markets-ledger-content' : ''}`} key={page}><div className="ledger-page-heading"><div><span className="ledger-page-kicker">Day {campaign.state.day} · {campaign.state.phase}</span><h2>{selected.title}</h2></div><span className="ledger-page-gold">{money(campaign.state.gold)} available</span></div>{selected.render({ state: campaign.state, send, busy, online, pending })}</div>
+      <div className={`ledger-content${page === 'markets' ? ' markets-ledger-content' : ''}`} key={page}>{page !== 'suppliers' && <div className="ledger-page-heading"><div><span className="ledger-page-kicker">Day {campaign.state.day} · {campaign.state.phase}</span><h2>{selected.title}</h2></div><span className="ledger-page-gold">{money(campaign.state.gold)} available</span></div>}{selected.render({ state: campaign.state, send, busy, online, pending })}</div>
       </div>
       <footer className="ledger-book-footer"><span>Campaign record · Revision {campaign.revision}</span>
         {campaign.state.phase === 'report'

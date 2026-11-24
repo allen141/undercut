@@ -128,7 +128,7 @@ Build the Market Explorer as the default morning and destination workspace.
 
 ## 5. Supplier workspace
 
-Reuse existing `visitVendor`, `leaveVendor`, `buy`, and `finishBuying` commands. Consolidate all local suppliers into one comparison workspace with expandable offers.
+Reuse existing `visitVendor`, `leaveVendor`, `buy`, and `finishBuying` commands. Use supplier comparison cards above the selected supplier’s offer table and order panel. Stack the table and order panel on narrow screens.
 
 - Show vendor identity/archetype, effective prices, stock, regular and special offers, reputation requirements, current tier/progress, visited/active state and visits remaining.
 - Inspect every vendor before consuming either daily visit. Explicit Begin Visit spends one of the two visits even without a purchase. No revisits; preserve existing visit restrictions.

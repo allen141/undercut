@@ -168,24 +168,7 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
 .ledger-paper p { margin-bottom: 8px; }
 .ledger-paper-kicker { color: #685644; }
 .ledger-paper-caption { display: block; margin-top: 15px; color: #685644; font: italic .86rem Georgia,serif; }
-.ledger-vendors { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,410px),1fr)); gap: 16px; }
-.ledger-vendor { padding: 16px; border: 1px solid #493b47; border-radius: 9px; background: #29232d; }
-.ledger-vendor header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.ledger-vendor h3 { margin: 0 0 3px; color: #f0d7ad; }
-.ledger-vendor header span { color: #b4aab4; font-size: .8rem; }
-.ledger-vendor .ledger-table { margin-bottom: 0; }
-.ledger-vendor .ledger-table>div { grid-template-columns: minmax(0,1fr) minmax(105px,.7fr) auto; }
-.ledger-vendor .ledger-table button { padding: 6px 10px; min-height: 36px; }
-.ledger-offers { display: grid; gap: 7px; margin-top: 12px; }
-.ledger-offer { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 12px; padding: 9px 12px; text-align: left; border-color: #51434f; background: #211b25; }
-.ledger-offer:hover:not(:disabled) { background: #352b37; border-color: #bda77f; }
-.ledger-offer.on-sale { border-color: #c99d5e; background: linear-gradient(100deg,#493725,#302833 78%); box-shadow: inset 3px 0 #edc477; }
-.ledger-offer.on-sale:hover:not(:disabled) { background: linear-gradient(100deg,#5a432b,#3b3038 78%); border-color: #edc477; }
-.ledger-offer-name { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .ledger-sale-badge { padding: 2px 7px; border: 1px solid #c99d5e; border-radius: 999px; background: #62492e; color: #ffe1a3; font-size: .68rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
-.ledger-offer-price,.ledger-offer-stock { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ledger-offer-price small,.ledger-offer-stock small { display: block; color: #b4aab4; font-size: .68rem; font-weight: 400; }
-.ledger-offer-stock { text-align: right; }
 .ledger-display-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 18px 0; }
 .ledger-display { min-width: 0; padding: 14px; border: 1px solid #493b47; border-radius: 8px; background: #29232d; }
 .ledger-display h3 { color: #f0d7ad; }
@@ -255,9 +238,6 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
   .ledger-nav button { padding: 7px 10px; font-size: .76rem; }
   .ledger-content { padding: 17px 15px; }
   .ledger-table>div { grid-template-columns: minmax(0,1fr) minmax(58px,.5fr) minmax(72px,.65fr); gap: 6px; padding: 8px; font-size: .79rem; }
-  .ledger-offer { grid-template-columns: minmax(0,1fr) auto; gap: 6px 10px; padding: 9px 10px; font-size: .83rem; }
-  .ledger-offer-stock { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 8px; text-align: left; color: #c7bac8; font-size: .75rem; }
-  .ledger-offer-stock small { text-align: right; }
   .performance-products>div { grid-template-columns: minmax(112px,1fr) repeat(4,minmax(72px,.72fr)); }
   .ledger-metrics { grid-template-columns: repeat(2,1fr); gap: 6px; }
   .ledger-metrics>div { padding: 10px 8px; }
@@ -291,7 +271,7 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
 .ledger-page-kicker { color: #765b3f; font-size: .67rem; letter-spacing: .11em; text-transform: uppercase; }
 .ledger-page-gold { color: #795825; font: 700 .8rem Georgia,serif; }
 .ledger-intro,.ledger-empty { color: #6c5a44; }
-.ledger-table,.ledger-metrics>div,.ledger-vendor,.ledger-display,.market-town,.performance-chart,.ledger-analysis,.ledger-chart-card { border-color: #c3ac83; border-radius: 7px; background: #f2e5c9; color: #3c2e22; box-shadow: 0 2px 5px #593b1b12; }
+.ledger-table,.ledger-metrics>div,.ledger-display,.market-town,.performance-chart,.ledger-analysis,.ledger-chart-card { border-color: #c3ac83; border-radius: 7px; background: #f2e5c9; color: #3c2e22; box-shadow: 0 2px 5px #593b1b12; }
 .ledger-table>div { border-color: #ddcaa5; }
 .ledger-table-head { background: #dfcba4; color: #654b2e; }
 .ledger-metrics>div { background: linear-gradient(#f8edda,#e9d6b2); }
@@ -302,12 +282,9 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
 .ledger-content button:not(.ledger-nav button) { border-color: #a38358; background-color: #efe0bd; color: #4b3625; }
 .ledger-content button:hover:not(:disabled) { background-color: #e3c895; }
 .ledger-content button.primary { border-color: #274d32; background: linear-gradient(#42774a,#285b36); color: #fff1ce; }
-.ledger-content .ledger-vendor h3,.ledger-content .ledger-display h3,.ledger-content .market-town h3,.ledger-content .merchant-route-preview h3 { color: #49331f; }
-.ledger-vendor header span,.market-town p,.merchant-route-preview p { color: #755e42; }
-.ledger-offer { border-color: #cfb98f; background: #fff3dc; color: #382a1e; }
-.ledger-offer.on-sale { border-color: #b77932; background: linear-gradient(100deg,#f4d7a5,#fff1d7 78%); }
+.ledger-content .ledger-display h3,.ledger-content .market-town h3,.ledger-content .merchant-route-preview h3 { color: #49331f; }
+.market-town p,.merchant-route-preview p { color: #755e42; }
 .ledger-sale-badge { background: #704d22; color: #fff0c4; }
-.ledger-offer-price small,.ledger-offer-stock small { color: #79664d; }
 .ledger-display { background: linear-gradient(#f7ebd2,#ead7b3); }
 .price-presets { border-color: #c4ac7e; }
 .price-presets legend,.display-price span { color: #735a3c; }
@@ -498,3 +475,58 @@ footer span:first-child { text-transform: uppercase; letter-spacing: .12em; }
 .market-compass-card .merchant-compass-town-forge { left: 50%; top: 47%; }
 .market-compass-card .merchant-compass-town-harbor { left: 76.3%; top: 60%; }
 @media(prefers-reduced-motion:reduce) { .market-compass-card .merchant-compass-needle { transition: none; } }
+
+.supplier-workspace { display: grid; gap: 10px; }
+.supplier-banner.ledger-chart-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 0 12px 0 0; overflow: hidden; }
+.supplier-banner img { width: clamp(84px, 14vw, 195px); height: 76px; object-fit: cover; }
+.supplier-banner h2 { margin: 0; font: 700 1.4rem Georgia,serif; }
+.supplier-visits { padding: 6px 9px; border: 1px solid #b89a6d; border-radius: 5px; background: #f7e9ca; font: 700 .85rem Georgia,serif; }
+.supplier-vendors { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.supplier-workspace .supplier-vendor { display: grid; align-content: center; justify-items: center; gap: 3px; padding: 8px 5px; text-align: center; background-image: linear-gradient(#fff1d655,#c49d591a); }
+.supplier-vendor strong { display: flex; align-items: center; justify-content: center; gap: 5px; font: 700 1rem Georgia,serif; }
+.supplier-vendor img { width: 28px; height: 24px; object-fit: contain; }
+.supplier-vendor small,.supplier-vendor span { font-size: .73rem; }
+.supplier-workspace .supplier-vendor[aria-pressed=true] { border-color: #a4844e; background: linear-gradient(#3a654a,#244734); color: #fff0ca; box-shadow: inset 0 0 0 1px #dbc28d88; }
+.supplier-details { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1fr); gap: 8px; align-items: start; }
+.supplier-quotes table { width: 100%; border-collapse: collapse; font-size: .84rem; font-variant-numeric: tabular-nums; }
+.supplier-quotes th,.supplier-quotes td { border-bottom: 1px solid #d6c19c; padding: 4px 5px; text-align: right; }
+.supplier-quotes th:first-child { text-align: left; }
+.supplier-quotes thead { background: #e5d1aa; font-family: Georgia,serif; }
+.supplier-quotes tr.selected { background: #d6d9ae; box-shadow: inset 3px 0 #6d875c; }
+.supplier-quotes tbody th { padding: 0; }
+.supplier-workspace .supplier-quotes th button { display: flex; align-items: center; gap: 5px; width: 100%; min-height: 38px; padding: 3px 5px; border: 0; border-radius: 0; background-color: transparent; text-align: left; font-size: inherit; }
+.supplier-quotes img { width: 31px; height: 28px; object-fit: contain; }
+.supplier-quotes td small { display: block; color: #755729; }
+.supplier-quotes .ledger-sale-badge { display: block; width: fit-content; padding: 1px 5px; font-size: .62rem; }
+.supplier-quotes .positive { color: #315635; }
+.supplier-quotes .negative { color: #873d32; }
+.supplier-quotes p,.supplier-order p,.supplier-order-title small { margin: 6px 0 0; color: #6b5239; font-size: .75rem; }
+.supplier-order { display: grid; gap: 7px; }
+.supplier-order-title { display: flex; align-items: center; gap: 8px; }
+.supplier-order-title img { width: 55px; height: 44px; object-fit: contain; }
+.supplier-order-title h3 { margin: 0; }
+.supplier-order dl { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; margin: 0; padding: 6px 0; border-block: 1px solid #d6c19c; font-size: .84rem; }
+.supplier-order dd { margin: 0; text-align: right; font-weight: 700; }
+.supplier-workspace button { min-height: 36px; padding: 4px 10px; }
+.supplier-order-actions { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 5px; align-items: center; font-size: .85rem; }
+.supplier-stepper { display: flex; align-items: center; justify-content: end; gap: 4px; }
+.supplier-stepper output { min-width: 2ch; text-align: center; font-weight: 700; }
+.supplier-footer { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 9px; border: 1px solid #82603b; border-radius: 6px; background: linear-gradient(#4d3426,#33231d); color: #f2dfb9; font-size: .82rem; }
+.supplier-workspace .supplier-footer button.primary { margin-left: auto; border-color: #bd904a; background: linear-gradient(#a96823,#754515); }
+@media (max-width:860px) {
+  .supplier-details { grid-template-columns: 1fr; }
+}
+@media (max-width:560px) {
+  .supplier-workspace { gap: 6px; }
+  .supplier-banner.ledger-chart-card { grid-template-columns: 1fr auto; gap: 5px; padding: 7px; }
+  .supplier-banner img { display: none; }
+  .supplier-banner h2 { font-size: 1rem; }
+  .supplier-banner h2 span { display: block; }
+  .supplier-visits { font-size: .72rem; }
+  .supplier-vendors { gap: 4px; }
+  .supplier-vendor strong { flex-direction: column; gap: 2px; font-size: .79rem; overflow-wrap: anywhere; }
+  .supplier-vendor small,.supplier-vendor span { font-size: .63rem; }
+  .supplier-quotes table { font-size: .72rem; }
+  .supplier-quotes th,.supplier-quotes td { padding-inline: 3px; }
+  .supplier-quotes img { width: 22px; height: 22px; }
+}
