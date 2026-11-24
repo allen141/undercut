@@ -1,10 +1,10 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
-import { TOWNS, quantity, type GoodId, type State } from '@undercut/game-core';
+import { WINDOW_SLOT_INDEX, quantity, type GoodId, type State } from '@undercut/game-core';
 import { fitSprite, placeSprite, type CustomerMotion, type ShopTextures } from './ShopAssets.js';
 import harborSceneData from './demo-assets/harbor/scene/harbor_shop.scene.json';
 import { roomLayout, type Bounds } from './ShopLayout.js';
 
-type ArtOptions = { townId?: string; selectedShelf?: number; stock?: (goodId: GoodId) => number };
+type ArtOptions = { selectedShelf?: number; stock?: (goodId: GoodId) => number };
 type HarborObject = {
   id: string;
   asset?: string;
@@ -37,24 +37,6 @@ function glow(x: number, y: number, radius: number, color: number) {
   return light;
 }
 
-export function dialTargets(dial: Bounds) {
-  const target = (x: number, y: number, w: number, h: number): Bounds => ({
-    x: dial.x + dial.w * x - w / 2, y: dial.y + dial.h * y - h / 2, w, h,
-  });
-  const town = (x: number, y: number) => target(x, y, dial.w * .27, Math.max(24, dial.h * .47));
-  return { towns: { meadow: town(.238, .61), forge: town(.50, .43), harbor: town(.763, .61) },
-    confirm: target(.50, .85, Math.max(30, dial.w * .24), Math.max(24, dial.h * .29)) };
-}
-
-export function drawDial(layer: Container, art: ShopTextures, dial: Bounds, town: string | null, expanded = false) {
-  layer.addChild(placeSprite(art['destination-dial'], dial));
-  const destination = TOWNS.find(destination => destination.id === town);
-  if (!destination || !expanded) return;
-  const { x, y, w, h } = dialTargets(dial).towns[destination.id];
-  layer.addChild(new Graphics().ellipse(x + w / 2, y + h / 2, w * .43, h * .46)
-    .stroke({ color: 0xffe2a6, width: 2, alpha: .9 }));
-}
-
 export function setGood(sprite: Sprite, art: ShopTextures, id: GoodId, x: number, y: number, size: number) {
   sprite.texture = art[`good-${id}`];
   const scale = size / Math.max(sprite.texture.width, sprite.texture.height);
@@ -81,6 +63,21 @@ export function setCoin(sprite: Sprite, x: number, y: number, radius: number, st
   sprite.visible = true;
 }
 
+function drawWindowDisplay(layer: Container, art: ShopTextures, layout: ReturnType<typeof roomLayout>, state: State,
+  options: ArtOptions) {
+  const shelf = state.shelves[WINDOW_SLOT_INDEX];
+  if (!shelf?.goodId) return;
+  const bounds = layout.sceneShelves[WINDOW_SLOT_INDEX];
+  const stock = Math.min(5, options.stock?.(shelf.goodId) ?? quantity(state, shelf.goodId));
+  const size = Math.min(bounds.h * .51, bounds.w * .17, 58);
+  const platformY = bounds.y + bounds.h * .80;
+  for (let item = 0; item < stock; item++) {
+    const sprite = new Sprite();
+    setGood(sprite, art, shelf.goodId, bounds.x + bounds.w * (.18 + .16 * item), platformY, size);
+    layer.addChild(sprite);
+  }
+}
+
 
 export function drawRoom(layer: Container, foreground: Container, art: ShopTextures, width: number, height: number,
   state: State, options: ArtOptions = {}) {
@@ -92,7 +89,7 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
     h: rect[3] * layout.scene.h / harborScene.authored_size[1],
   });
   const background = new Graphics().rect(0, 0, width, height).fill(0x1c292d);
-  const townId = options.townId ?? state.townId;
+  const townId = state.townId;
   const roomBackground = townId === 'meadow'
     ? art.townBackgrounds.meadow
     : townId === 'forge' ? art.townBackgrounds.forge : art.townBackgrounds.harbor;
@@ -111,7 +108,7 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
   lanternLight([1090, 305, 75, 124], Math.min(56, layout.scene.w * .04));
 
   const replaceableGoods = new Set([
-    'shelf_bottle_teal', 'shelf_bottle_amber', 'shelf_gem', 'shelf_chest', 'shelf_jar', 'shelf_rope',
+    'compass', 'shelf_bottle_teal', 'shelf_bottle_amber', 'shelf_gem', 'shelf_chest', 'shelf_jar', 'shelf_rope',
     'shell', 'boat', 'table_bottle',
   ]);
   const objects = [...harborScene.objects].sort((a, b) => a.z_order - b.z_order);
@@ -123,6 +120,7 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
       const keeper = harborScene.animations.shopkeeper.idle.frames[0];
       const counter = harborScene.assets.merchant_counter?.file;
       if (counter) {
+        drawWindowDisplay(layer, art, layout, state, options);
         layer.addChild(placeSprite(art.harbor[keeper], toScreen([782, 190, 244, 184])));
         layer.addChild(placeSprite(art.harbor[counter], toScreen([628, 351, 568, 250])));
       }
@@ -146,8 +144,6 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
     layer.addChild(new Graphics().rect(layout.scene.x, layout.scene.y, layout.scene.w, layout.scene.h)
       .fill({ color: 0x17172d, alpha: .12 }));
   }
-  if (state.phase !== 'travel') drawDial(layer, art, layout.dial, options.townId ?? state.townId);
-
   const shelfFrontEdges = [
     { leftY: 291, rightY: 177 },
     { leftY: 410, rightY: 278 },
@@ -169,6 +165,7 @@ export function drawRoom(layer: Container, foreground: Container, art: ShopTextu
       }
     }
     if (!shelf?.goodId) return;
+    if (index === WINDOW_SLOT_INDEX) return;
     const stock = options.stock?.(shelf.goodId) ?? quantity(state, shelf.goodId);
     if (index < shelfFrontEdges.length) {
       const edge = shelfFrontEdges[index];

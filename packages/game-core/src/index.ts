@@ -5,6 +5,7 @@ import {
   type VendorOffer, type VendorReputation,
 } from './market.js';
 import { randomInt, seededRandom } from './random.js';
+import { newspaperForDay, type Newspaper } from './world-news.js';
 
 export { GOODS, TOWNS, priceRange, type GoodId, type Town } from './catalog.js';
 export {
@@ -17,6 +18,9 @@ export const RULES_VERSION = 1;
 export const FLOOR_SHELF_COUNT = 3;
 export const WINDOW_SLOT_INDEX = FLOOR_SHELF_COUNT;
 export const CUSTOMERS_PER_DAY = 8;
+export const DISPLAY_CAPACITY = 3;
+export const RESTOCK_WAIT_MS = 3000;
+export type PricePreset = 80 | 100 | 120;
 const DISPLAY_COUNT = FLOOR_SHELF_COUNT + 1;
 const STANDOUT_COUNT_WEIGHTS = [1, 2, 1] as const;
 const STANDOUT_COUNTS = STANDOUT_COUNT_WEIGHTS.flatMap((weight, count) => Array<number>(weight).fill(count));
@@ -34,6 +38,8 @@ export type CustomerResult = {
   result: 'sold' | 'notDisplayed' | 'soldOut' | 'overBudget'
     | 'offerAccepted' | 'priceHeld' | 'offerDeclined' | 'priceHeldLost';
   price: number | null;
+  /** Actual FIFO unit cost for this sale; null for outcomes without a sale. */
+  costOfSales?: number | null;
 };
 export type DailyResult = {
   day: number;
@@ -43,6 +49,10 @@ export type DailyResult = {
   purchases: number;
   profit: number;
   sold: number;
+  startingGold?: number;
+  endingGold?: number;
+  remainingStockValue?: number;
+  conversion?: number;
   purchasesByVendor?: Record<string, VendorPurchases>;
   negotiations?: NegotiationResult[];
   customerResults?: CustomerResult[];
@@ -56,13 +66,15 @@ export type MarketRecord = {
   vendors: { vendorId: string; offers: { unitCost: number; quantity: number }[] }[];
 };
 export type JournalEvent =
+  | { day: number; type: 'newspaperIssued'; issue: Newspaper }
   | { day: number; type: 'townChosen'; townId: string; market: MarketRecord[] }
   | { day: number; type: 'vendorVisited' | 'vendorLeft'; vendorId: string }
   | { day: number; type: 'buyingFinished' }
   | { day: number; type: 'stockBought'; goodId: GoodId; vendorId: string; quantity: number; unitCost: number; total: number }
   | { day: number; type: 'shelfSet'; slot: number; goodId: GoodId | null; price: number }
+  | { day: number; type: 'displayRestocked'; slot: number; goodId: GoodId; quantity: number }
   | { day: number; type: 'shopOpened'; shelves: { slot: number; goodId: GoodId | null; price: number }[] }
-  | { day: number; type: 'customerServed'; customer: number; goodId: GoodId; outcome: CustomerResult['result']; price: number | null; budget: number }
+  | { day: number; type: 'customerServed'; customer: number; goodId: GoodId; outcome: CustomerResult['result']; price: number | null; budget: number; costOfSales?: number | null }
   | { day: number; type: 'dayClosed'; result: DailyResult };
 export type LegacyState = {
   rulesVersion: number;
@@ -83,6 +95,8 @@ export type LegacyState = {
   history: DailyResult[];
   /** Optional so snapshots written before the persistent ledger remain readable. */
   journal?: JournalEvent[];
+  /** Exact published editions, present in campaigns created after the archive was added. */
+  newspapers?: Newspaper[];
 };
 type ShopLoopState = {
   marketDay: number | null;
@@ -95,6 +109,11 @@ type ShopLoopState = {
   purchasesByVendor: Record<string, VendorPurchases>;
   negotiations: NegotiationResult[];
   customerResults: CustomerResult[];
+  /** Optional so older campaign snapshots preserve their original display semantics. */
+  displayStock?: number[];
+  pricePresets?: PricePreset[];
+  businessMode?: boolean;
+  pendingRestock?: { customerIndex: number; slot: number; goodId: GoodId } | null;
 };
 export type State = LegacyState & ShopLoopState;
 
@@ -108,7 +127,7 @@ function emptyShelf(): Shelf {
 }
 
 export function newGame(seed: number): State {
-  return {
+  const state: State = {
     rulesVersion: RULES_VERSION,
     seed,
     day: 1,
@@ -126,6 +145,7 @@ export function newGame(seed: number): State {
     log: [],
     history: [],
     journal: [],
+    newspapers: [],
     marketDay: null,
     vendorOffers: {},
     activeVendorId: null,
@@ -136,7 +156,15 @@ export function newGame(seed: number): State {
     purchasesByVendor: {},
     negotiations: [],
     customerResults: [],
+    displayStock: Array.from({ length: DISPLAY_COUNT }, () => 0),
+    pricePresets: Array.from({ length: DISPLAY_COUNT }, () => 100),
+    businessMode: false,
+    pendingRestock: null,
   };
+  const issue = newspaperForDay(seed, state.day, state.history);
+  state.newspapers!.push(issue);
+  state.journal!.push({ day: state.day, type: 'newspaperIssued', issue });
+  return state;
 }
 
 export function vendorOffersForTown(
@@ -154,6 +182,14 @@ export function upgradeState(previous: LegacyState | State): State {
   const vendorReputation = saved.vendorReputation ?? {};
   const hasCurrentMarket = saved.phase !== 'travel' && saved.marketDay === saved.day;
   const needsMarket = saved.phase === 'prepare' && !hasCurrentMarket;
+  const pendingRestock = saved.pendingRestock;
+  const restockSlot = pendingRestock?.slot;
+  const validPendingRestock = hasCurrentMarket && saved.phase === 'open' && saved.businessMode === true
+    && saved.displayStock?.length === DISPLAY_COUNT && pendingRestock?.customerIndex === saved.served
+    && Number.isInteger(restockSlot) && restockSlot! >= 0 && restockSlot! < DISPLAY_COUNT
+    && saved.shelves[restockSlot!]?.goodId === pendingRestock.goodId
+    && saved.customers[pendingRestock.customerIndex]?.goodId === pendingRestock.goodId
+    && (saved.displayStock[restockSlot!] ?? 0) === 0 && quantity(saved, pendingRestock.goodId) > 0;
 
   return {
     ...saved,
@@ -171,7 +207,18 @@ export function upgradeState(previous: LegacyState | State): State {
     purchasesByVendor: hasCurrentMarket ? saved.purchasesByVendor ?? {} : {},
     negotiations: hasCurrentMarket ? saved.negotiations ?? [] : [],
     customerResults: hasCurrentMarket ? saved.customerResults ?? [] : [],
+    displayStock: saved.displayStock?.length === DISPLAY_COUNT ? saved.displayStock : undefined,
+    pricePresets: saved.pricePresets?.length === DISPLAY_COUNT ? saved.pricePresets : Array.from({ length: DISPLAY_COUNT }, () => 100),
+    businessMode: saved.businessMode === true,
+    pendingRestock: validPendingRestock && pendingRestock ? pendingRestock : null,
   };
+}
+
+export function priceForPreset(townId: string, goodId: GoodId, preset: PricePreset) {
+  const town = TOWNS.find(candidate => candidate.id === townId);
+  requireRule(town, 'Choose a town before pricing displays.');
+  const range = priceRange(town, goodId);
+  return Math.max(1, Math.min(10000, Math.round(((range.min + range.max) / 2) * preset / 100)));
 }
 
 export function quantity(state: LegacyState, goodId: string) {
@@ -203,7 +250,7 @@ function createCustomers(state: State, town: Town): Customer[] {
   return customers;
 }
 
-function recordSale(state: State, goodId: GoodId, price: number) {
+function recordSale(state: State, goodId: GoodId, price: number, slot?: number) {
   const lots = state.inventory[goodId];
   const lot = lots[0];
   state.costOfSales += lot.unitCost;
@@ -212,6 +259,8 @@ function recordSale(state: State, goodId: GoodId, price: number) {
   state.gold += price;
   state.revenue += price;
   state.sold++;
+  if (slot !== undefined && state.displayStock) state.displayStock[slot] = Math.max(0, state.displayStock[slot] - 1);
+  return lot.unitCost;
 }
 
 function closeDay(state: State) {
@@ -225,10 +274,27 @@ function closeDay(state: State) {
     purchases: state.purchases,
     profit: state.revenue - state.costOfSales,
     sold: state.sold,
+    startingGold: state.gold + state.purchases - state.revenue,
+    endingGold: state.gold,
+    remainingStockValue: inventoryValue(state),
+    conversion: state.served ? state.sold / state.served : 0,
     purchasesByVendor: state.purchasesByVendor,
     negotiations: state.negotiations,
     customerResults: state.customerResults,
   });
+}
+
+function resolveRestockWait(state: State) {
+  const pending = state.pendingRestock;
+  requireRule(state.phase === 'open' && state.businessMode && pending, 'There is no waiting customer.');
+  const customer = state.customers[pending.customerIndex];
+  requireRule(pending.customerIndex === state.served && customer, 'The waiting customer has changed.');
+  const name = GOODS.find(good => good.id === customer.goodId)!.name;
+  state.log.push(`Wanted ${name}: sold out.`);
+  state.customerResults.push({ customerIndex: state.served, goodId: customer.goodId, result: 'soldOut', price: null, costOfSales: null });
+  state.served++;
+  state.pendingRestock = null;
+  if (state.served === state.customers.length) closeDay(state);
 }
 
 function advanceBusiness(state: State) {
@@ -240,10 +306,18 @@ function advanceBusiness(state: State) {
     let message: string;
     let result: CustomerResult['result'];
     let price: number | null = null;
+    let costOfSales: number | null = null;
     if (!shelf) {
       result = 'notDisplayed';
       message = `Wanted ${good.name}: not displayed.`;
-    } else if (quantity(state, customer.goodId) === 0) {
+    } else if (state.displayStock && state.displayStock.length === DISPLAY_COUNT
+      ? state.displayStock[state.shelves.indexOf(shelf)] === 0
+      : quantity(state, customer.goodId) === 0) {
+      const slot = state.shelves.indexOf(shelf);
+      if (state.businessMode && slot >= 0 && quantity(state, customer.goodId) > 0) {
+        state.pendingRestock = { customerIndex: state.served, slot, goodId: customer.goodId };
+        return;
+      }
       result = 'soldOut';
       message = `Wanted ${good.name}: sold out.`;
     } else if (customer.bargainDiscount && shelf.price > 1) {
@@ -258,14 +332,18 @@ function advanceBusiness(state: State) {
       result = 'overBudget';
       message = `Declined ${good.name} at ${shelf.price}g: budget was ${customer.budget}g.`;
     } else {
-      recordSale(state, customer.goodId, shelf.price);
+      costOfSales = recordSale(state, customer.goodId, shelf.price, state.shelves.indexOf(shelf));
       result = 'sold';
       price = shelf.price;
       message = `Bought ${good.name} for ${shelf.price}g.`;
     }
     state.log.push(message);
-    state.customerResults.push({ customerIndex: state.served, goodId: customer.goodId, result, price });
+    state.customerResults.push({ customerIndex: state.served, goodId: customer.goodId, result, price, costOfSales });
     state.served++;
+    if (state.businessMode) {
+      if (state.served === state.customers.length) closeDay(state);
+      return;
+    }
   }
 
   closeDay(state);
@@ -275,6 +353,7 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
   const prior = upgradeState(previous);
   const state = structuredClone(prior);
   state.journal ??= [];
+  let restockedQuantity = 0;
   const town = TOWNS.find((candidate) => candidate.id === state.townId);
 
   switch (command.type) {
@@ -285,6 +364,10 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
       state.phase = 'prepare';
       state.marketDay = state.day;
       state.vendorOffers = vendorOffersForTown(state, state.townId);
+      state.pricePresets = Array.from({ length: DISPLAY_COUNT }, () => 100);
+      state.shelves = state.shelves.map(shelf => shelf.goodId && quantity(state, shelf.goodId) > 0
+        ? { ...shelf, price: priceForPreset(state.townId!, shelf.goodId, 100) }
+        : emptyShelf());
       break;
     }
 
@@ -358,12 +441,59 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
         'This good is already displayed.',
       );
       state.shelves[slot] = { goodId: good?.id ?? null, price };
+      state.pricePresets![slot] = 100;
+      break;
+    }
+
+    case 'configureDisplays': {
+      requireRule(state.phase === 'prepare' && state.buyingComplete, 'Finish buying before setting displays.');
+      requireRule(new Set(command.displays.map(display => display.slot)).size === DISPLAY_COUNT,
+        'Configure each display exactly once.');
+      const next = Array.from({ length: DISPLAY_COUNT }, (_, slot) => command.displays.find(display => display.slot === slot)!);
+      const selectedGoods = next.flatMap(display => display.goodId ? [display.goodId] : []);
+      requireRule(new Set(selectedGoods).size === selectedGoods.length, 'A good can only be assigned to one display.');
+      const townId = state.townId;
+      requireRule(townId, 'Choose a town before setting displays.');
+      const shelves = next.map(display => {
+        const good = GOODS.find(candidate => candidate.id === display.goodId);
+        requireRule(display.goodId === null || good, 'Unknown good.');
+        requireRule(!good || quantity(state, good.id) > 0, 'Buy this good before displaying it.');
+        return { goodId: good?.id ?? null, price: good ? priceForPreset(townId, good.id, display.pricePreset) : 1 };
+      });
+      state.shelves = shelves;
+      state.pricePresets = next.map(display => display.pricePreset);
+      break;
+    }
+
+    case 'restockDisplay': {
+      requireRule(state.phase === 'open' && state.businessMode && state.displayStock?.length === DISPLAY_COUNT && !state.pendingNegotiation,
+        'A display can only be refilled during current business.');
+      const { slot } = command;
+      requireRule(slot >= 0 && slot < DISPLAY_COUNT, 'Unknown display.');
+      requireRule(!state.pendingRestock || state.pendingRestock.slot === slot, 'Refill the display requested by the waiting customer.');
+      const goodId = state.shelves[slot].goodId;
+      requireRule(goodId, 'That display is empty.');
+      const displayed = state.displayStock![slot] ?? 0;
+      const reserve = Math.max(0, quantity(state, goodId) - displayed);
+      const moved = Math.min(DISPLAY_CAPACITY - displayed, reserve);
+      requireRule(moved > 0, 'There is no reserve stock for this display.');
+      restockedQuantity = moved;
+      state.displayStock![slot] += moved;
+      state.pendingRestock = null;
+      break;
+    }
+
+    case 'resolveRestockWait': {
+      resolveRestockWait(state);
       break;
     }
 
     case 'open': {
       requireRule(state.phase === 'prepare' && state.buyingComplete && town, 'Choose a town and finish buying before opening.');
       state.customers = createCustomers(state, town);
+      state.displayStock = state.shelves.map(shelf => shelf.goodId
+        ? Math.min(DISPLAY_CAPACITY, quantity(state, shelf.goodId)) : 0);
+      state.businessMode = true;
       state.phase = 'open';
       break;
     }
@@ -371,7 +501,8 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
     case 'serve': {
       requireRule(state.phase === 'open', 'The shop is not open.');
       requireRule(!state.pendingNegotiation, 'Answer the customer’s offer first.');
-      advanceBusiness(state);
+      if (state.pendingRestock) resolveRestockWait(state);
+      else advanceBusiness(state);
       break;
     }
 
@@ -382,6 +513,7 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
       const customer = state.customers[state.served];
       const good = GOODS.find((candidate) => candidate.id === goodId)!;
       let salePrice: number | null = null;
+      let costOfSales: number | null = null;
       let result: CustomerResult['result'];
       switch (command.outcome) {
         case 'acceptOffer':
@@ -406,12 +538,14 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
         default:
           throw new RuleError('Unknown negotiation response.');
       }
-      if (salePrice !== null) recordSale(state, goodId, salePrice);
+      if (salePrice !== null) costOfSales = recordSale(state, goodId, salePrice, state.shelves.findIndex(shelf => shelf.goodId === goodId));
       state.negotiations.push({ ...pending, outcome: command.outcome, salePrice });
-      state.customerResults.push({ customerIndex: state.served, goodId, result, price: salePrice });
+      state.customerResults.push({ customerIndex: state.served, goodId, result, price: salePrice, costOfSales });
       state.served++;
       state.pendingNegotiation = null;
-      advanceBusiness(state);
+      state.pendingRestock = null;
+      if (state.businessMode && state.served === state.customers.length) closeDay(state);
+      else if (!state.businessMode) advanceBusiness(state);
       break;
     }
 
@@ -441,6 +575,11 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
       state.purchasesByVendor = {};
       state.negotiations = [];
       state.customerResults = [];
+      state.displayStock = Array.from({ length: DISPLAY_COUNT }, () => 0);
+      state.pricePresets = Array.from({ length: DISPLAY_COUNT }, () => 100);
+      state.businessMode = false;
+      state.pendingRestock = null;
+      (state.newspapers ??= []).push(newspaperForDay(state.seed, state.day, state.history));
       break;
     }
   }
@@ -486,17 +625,26 @@ export function applyCommand(previous: LegacyState | State, command: Command): S
     });
   } else if (command.type === 'shelf') {
     record({ day: state.day, type: 'shelfSet', slot: command.slot, goodId: command.goodId as GoodId | null, price: command.price });
+  } else if (command.type === 'configureDisplays') {
+    state.shelves.forEach((shelf, slot) => record({ day: state.day, type: 'shelfSet', slot, goodId: shelf.goodId, price: shelf.price }));
+  } else if (command.type === 'restockDisplay') {
+    const shelf = state.shelves[command.slot];
+    if (shelf.goodId) record({ day: state.day, type: 'displayRestocked', slot: command.slot, goodId: shelf.goodId, quantity: restockedQuantity });
   } else if (command.type === 'open') {
     record({ day: state.day, type: 'shopOpened', shelves: state.shelves.map((shelf, slot) => ({ slot, ...shelf })) });
+  } else if (command.type === 'nextDay') {
+    const issue = state.newspapers?.at(-1);
+    if (issue) record({ day: state.day, type: 'newspaperIssued', issue: structuredClone(issue) });
   }
 
-  if (command.type === 'serve' || command.type === 'negotiate') {
+  if (command.type === 'serve' || command.type === 'negotiate' || command.type === 'resolveRestockWait') {
     const priorResults = prior.customerResults;
     for (const result of state.customerResults.slice(priorResults.length)) {
       record({
         day: state.day, type: 'customerServed', customer: result.customerIndex + 1,
         goodId: result.goodId, outcome: result.result, price: result.price,
         budget: state.customers[result.customerIndex]?.budget ?? 0,
+        costOfSales: result.costOfSales ?? null,
       });
     }
   }

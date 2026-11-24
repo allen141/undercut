@@ -2,12 +2,12 @@ import { AccessibilitySystem, Application, Container, Graphics, Rectangle, Sprit
 import 'pixi.js/browser';
 import 'pixi.js/unsafe-eval';
 import {
-  CUSTOMERS_PER_DAY, GOODS, MAX_VENDOR_VISITS, REPUTATION_TIERS, TOWNS, WINDOW_SLOT_INDEX,
+  CUSTOMERS_PER_DAY, GOODS, MAX_VENDOR_VISITS, REPUTATION_TIERS, RESTOCK_WAIT_MS, TOWNS, WINDOW_SLOT_INDEX,
   inventoryValue, priceRange, quantity, reputationFor, vendorOffersForTown, vendorsInTown, type CustomerResult, type GoodId,
   newspaperForDay,
 } from '@undercut/game-core';
 import type { BusinessPresentation, GameProps } from './Game.js';
-import { customerPortrait, dialTargets, drawDial, drawRoom, phaseBooks, setCoin, setGood, setCustomerAnimation } from './ShopArt.js';
+import { customerPortrait, drawRoom, phaseBooks, setCoin, setGood, setCustomerAnimation } from './ShopArt.js';
 import { loadShopTextures, placeSprite, skin } from './ShopAssets.js';
 import { roomLayout, shopScale, type Bounds } from './ShopLayout.js';
 
@@ -76,8 +76,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   app.canvas.dataset.renderer = app.renderer.name;
 
   let previous = props().campaign;
-  let panel: Panel | null = previous.state.phase === 'travel' ? 'newspaper'
-    : previous.state.pendingNegotiation ? 'book' : null;
+  let panel: Panel | null = previous.state.pendingNegotiation ? 'book' : null;
   let page: Page = 'summary';
   let pageIndex = 0;
   let journalArticle: number | null = null;
@@ -95,6 +94,9 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
   let backingWidth = 0, backingHeight = 0;
   let disposed = false;
   let frame = 0;
+  let deskBookFrame = 0;
+  let deskBook: Sprite | undefined;
+  let deskBookY = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let attemptedRevision: number | undefined;
   let transition: { start: number; kind: 'open' | 'turn'; from: Rect } | undefined;
@@ -188,6 +190,22 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       frame = requestAnimationFrame(drawMotion);
     } else transition = undefined;
     app.render();
+  }
+
+  function animateDeskBook(now: number) {
+    deskBookFrame = 0;
+    if (disposed || !deskBook || panel || props().campaign.state.phase === 'open' ||
+      reducedMotion.matches || document.hidden) return;
+    deskBook.position.y = deskBookY + Math.sin(now / 780) * 1.8;
+    deskBook.rotation = Math.sin(now / 1050) * .025;
+    app.render();
+    deskBookFrame = requestAnimationFrame(animateDeskBook);
+  }
+
+  function startDeskBookAnimation() {
+    if (deskBookFrame || !deskBook || panel || props().campaign.state.phase === 'open' ||
+      reducedMotion.matches || document.hidden) return;
+    deskBookFrame = requestAnimationFrame(animateDeskBook);
   }
 
   function show(next: Panel, origin: string, initialFocus = 'dismiss') {
@@ -371,7 +389,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const cash = state.gold - laterRevenue;
     const latest = state.customerResults.find(result => result.customerIndex === served - 1);
     const latestOutcome = latest ? outcome(latest) : undefined;
-    const request = playback ? state.customers[playback.index]?.goodId : undefined;
+    const request = playback ? state.customerResults.find(result => result.customerIndex === playback.index)?.goodId : undefined;
     const activeResult = playback?.revealed ? latestOutcome : undefined;
     const requestText = request ? `Looking for ${nameOf(request)}` : 'Arriving at the shop';
     const offer = state.pendingNegotiation;
@@ -436,53 +454,45 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       layer.addChild(item);
     }
 
-    const townId = phase === 'travel' ? preview.id : undefined;
     const artShelf = panel === 'shelf' || panel === 'price' ? selectedShelf : undefined;
     const displayState = state.shelves.map(shelf => [shelf.goodId, shelf.goodId ? Math.min(5, visibleStock(shelf.goodId)) : 0]);
-    const key = JSON.stringify([w, h, phase, townId ?? state.townId, artShelf, displayState]);
+    const key = JSON.stringify([w, h, phase, state.townId, artShelf, displayState]);
     if (key !== artKey) {
       art.removeChildren().forEach(child => child.destroy({ children: true }));
       foreground.removeChildren().forEach(child => child.destroy({ children: true }));
-      drawRoom(art, foreground, textures, w, h, { ...state, phase }, { townId, selectedShelf: artShelf, stock: visibleStock });
+      drawRoom(art, foreground, textures, w, h, { ...state, phase }, { selectedShelf: artShelf, stock: visibleStock });
       artKey = key;
     }
 
-    box(scene, rect(margin, 10, w - 2 * margin, 48), ink, 0x946c50, .94);
     const navW = narrow ? 59 : 131;
     control(scene, 'back', 'All campaigns', rect(margin + 3, 12, navW, 44), p.back,
       { copy: narrow ? '‹ Menu' : '‹ All campaigns', disabled: p.busy || !p.online });
-    control(scene, 'stock', 'Inventory and gold', rect(w - margin - (narrow ? 67 : 114), 12, narrow ? 64 : 111, 44),
+    if (phase !== 'open') control(scene, 'stock', 'Inventory and gold', rect(w - margin - (narrow ? 67 : 114), 12, narrow ? 64 : 111, 44),
       () => { if (p.openLedger) p.openLedger('inventory'); else show('stock', 'stock'); }, { copy: money(cash) });
-    const location = phase === 'travel' ? `${preview.name} preview` : town?.name ?? 'Between towns';
-    text(scene, narrow ? `Day ${state.day} · ${location}` : `${p.campaign.name.slice(0, 36)}  /  Day ${state.day} · ${location}`,
-      w / 2, 34, { align: 'center', max: w - (narrow ? 155 : 308), serif: !narrow, size: narrow ? 13 : 17 });
 
+    const ledgerPage = phase === 'travel' ? 'markets' : phase === 'report' ? 'performance'
+      : phase === 'open' ? 'activity' : state.buyingComplete ? 'merchandising' : 'suppliers';
+    const ledgerTitle = phase === 'travel' ? 'Markets' : phase === 'report' ? 'Performance'
+      : state.buyingComplete ? 'Merchandising' : 'Suppliers';
     function openBook() {
-      show('book', 'book');
+      if (p.openLedger) p.openLedger(ledgerPage);
+      else show('book', 'book');
     }
 
-    if (town && phase !== 'travel') {
-      const journalName = `${town.name} Journal`;
-      control(scene, 'town-journal', `Open ${journalName}`, layout.journal, () => {
-        journalArticle = null;
-        show('journal', 'town-journal');
-      }, { copy: journalName });
-    }
-    if (phase === 'travel') {
-      control(scene, 'morning-paper', 'Read the morning newspaper', layout.journal,
-        () => show('newspaper', 'morning-paper'), { copy: 'Morning Gazette' });
-    }
-
-    const bookName = { travel: 'Open route atlas', prepare: 'Open wholesale book', open: 'Open business book', report: 'Day’s takings' }[phase];
+    const bookName = `Open ${ledgerTitle}`;
+    deskBook = undefined;
+    const { x, y, w: bookWidth, h: bookHeight } = layout.book;
+    const ledger = placeSprite(textures.ledger, layout.book);
+    ledger.anchor.set(.5);
+    ledger.position.set(x + bookWidth / 2, y + bookHeight / 2);
+    ledger.eventMode = 'static';
+    ledger.cursor = 'pointer';
+    ledger.hitArea = new Rectangle(-bookWidth / 2, -bookHeight / 2, bookWidth, bookHeight);
+    ledger.on('pointertap', openBook);
+    deskBook = ledger;
+    deskBookY = ledger.position.y;
+    scene.addChild(ledger);
     control(scene, 'book', bookName, layout.book, openBook, { hide: true });
-    if (!modal) {
-      const { x, y, w: width, h: height } = layout.book;
-      const nameplate = skin(textures['button-primary'], rect(x, y + height - 24, width, 29), 21, 12);
-      scene.addChild(nameplate);
-      text(scene, phaseBooks[phase].title, x + width / 2, y + height - 10,
-        { serif: true, size: narrow ? 13 : 16, align: 'center', max: width - 12 });
-    }
-    if (phase === 'travel' && panel && panel !== 'book') drawDial(scene, textures, layout.travelDial, preview.id, true);
     if (phase === 'prepare' && state.buyingComplete || phase === 'open') {
       layout.sceneShelves.forEach((bounds, slot) => {
         const shelf = state.shelves[slot];
@@ -491,7 +501,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         const tagW = Math.min(bounds.w - 3, 142);
         const tagY = slot < 2 ? bounds.y + bounds.h * .66 : bounds.y + bounds.h - 15;
         box(scene, rect(bounds.x + (bounds.w - tagW) / 2, tagY, tagW, 28), ink, 0x815e4b, .92, 4);
-        const count = shelf.goodId ? visibleStock(shelf.goodId) : 0;
+        const count = shelf.goodId ? phase === 'open' && state.displayStock
+          ? state.displayStock[slot] : visibleStock(shelf.goodId) : 0;
         const caption = shelf.goodId ? `${nameOf(shelf.goodId)} · ${phase === 'open' ? `${count} left` : money(shelf.price)}` : displayName(slot);
         text(scene, caption, bounds.x + bounds.w / 2,
           tagY + 14, { align: 'center', size: 11, max: tagW - 5 });
@@ -543,17 +554,25 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         text(scene, `+${money(sale.price!)}`, cardX + cardW - 65, cardY + 77, { size: 19, color: gold });
       }
     }
+    if (!modal && state.pendingRestock) {
+      const { slot, customerIndex } = state.pendingRestock;
+      const goodId = state.pendingRestock?.customerIndex === customerIndex ? state.pendingRestock.goodId : undefined;
+      const body = layout.sceneVisitor;
+      const cardW = Math.min(narrow ? 300 : 390, w - margin * 2);
+      const cardX = Math.max(margin, Math.min(w - margin - cardW, body.x + body.w / 2 - cardW / 2));
+      const cardY = layout.bookBelowWall ? layout.page.y + 25 : Math.max(104, body.y - 126);
+      box(scene, rect(cardX, cardY, cardW, 112), 0x382a2d, 0xd4b67d, .98, 9);
+      text(scene, 'A customer is waiting', cardX + 14, cardY + 20, { size: 13, color: gold });
+      text(scene, goodId ? `Looking for ${nameOf(goodId)}` : 'Looking for a displayed good', cardX + 14, cardY + 47,
+        { size: 19, serif: true, max: cardW - 28 });
+      text(scene, 'Refill now, or the visit resolves shortly.', cardX + 14, cardY + 73, { size: 12, color: muted });
+      control(scene, 'restock-waiting-display', 'Refill requested display',
+        rect(cardX + cardW - 134, cardY + 78, 122, 28), () => p.send({ type: 'restockDisplay', slot }),
+        { copy: 'Refill display', primary: true, disabled: blocked });
+    }
 
     const tip = !p.online ? 'You’re offline. Reconnect to continue trading.' : p.error || (
-      p.busy ? 'Saving…' : p.pending ? 'Confirm your last action.' :
-      phase === 'travel' ? 'Pick a town on the dial. Press its center to travel.' :
-      phase === 'prepare' ? state.buyingComplete ? 'Set up your displays and open the shop.' : 'Open the supplier ledger to compare vendors.' :
-      phase === 'open' ? latestOutcome?.line ?? state.log[served - 1] ?? 'The shop is open. Customers are on their way.' :
-      'The shop is closed. Review your accounts when ready.');
-    if (!modal || !layout.bookBelowWall) {
-      box(scene, rect(margin, h - 43, w - margin * 2, 35), ink, 0x76574b, .94);
-      text(scene, tip, w / 2, h - 25, { align: 'center', max: w - margin * 2 - 14, size: narrow ? 11 : 13, color: p.error ? 0xffbcb0 : muted });
-    }
+      p.busy ? 'Saving…' : p.pending ? 'Confirm your last action.' : '');
     if (!modal && p.pending && p.online && !p.busy) {
       control(scene, 'retry', 'Confirm last action', rect(w / 2 - 88, h - 102, 176, 44), () => p.send(), { primary: true });
     }
@@ -795,7 +814,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
         const period = days.length === 1 ? `Day ${days[0]}` : `Days ${days[0]}–${days.at(-1)}`;
         note(`${period} · Solid town avg · Dashed global avg`, legendY);
         note('— No local regular price', legendY + 18);
-        note('Pick a town on the dial. Press its center to travel.', legendY + 41);
+        note('Choose a destination from Markets in the ledger.', legendY + 41);
       }
 
       if (panel === 'book' && phase === 'prepare' && !state.buyingComplete) {
@@ -1070,19 +1089,6 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       }
     }
 
-    if (phase === 'travel' && (!panel || panel === 'book')) {
-      const dialLayer = new Container();
-      scene.addChild(dialLayer);
-      drawDial(dialLayer, textures, layout.travelDial, preview.id, true);
-      const targets = dialTargets(layout.travelDial);
-      TOWNS.forEach((town, i) => control(dialLayer, `preview-${town.id}`, `Preview ${town.name}`, targets.towns[town.id], () => {
-        selectedTown = i;
-        render();
-      }, { hide: true, active: i === selectedTown }));
-      control(dialLayer, 'choose-town', `Choose ${preview.name}`, targets.confirm,
-        () => p.send({ type: 'chooseTown', townId: preview.id }), { hide: true, disabled: blocked });
-    }
-
     keyboard.setAttribute('aria-label', modal ? `${readingTitle} controls` : 'Shop controls');
     sync(actions);
     reading.hidden = !modal;
@@ -1102,6 +1108,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     }
     paintFocus();
     paintVisit(performance.now());
+    startDeskBookAnimation();
     if ((playback || offerArrival !== undefined) && !visitFrame && !reducedMotion.matches && !document.hidden) {
       visitFrame = requestAnimationFrame(animateVisit);
     }
@@ -1120,12 +1127,13 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     const { revision, state } = p.campaign;
     if (state.phase !== 'open' || state.pendingNegotiation || playback || p.busy || p.pending || !p.online ||
       attemptedRevision === revision) return;
+    const restockWait = !!state.pendingRestock;
     timer = setTimeout(() => {
       const latest = props();
       if (latest.campaign.revision !== revision || latest.busy || latest.pending || !latest.online) return;
       attemptedRevision = revision;
-      latest.send({ type: 'serve' });
-    }, reducedMotion.matches ? 0 : 260);
+      latest.send(restockWait ? { type: 'resolveRestockWait' } : { type: 'serve' });
+    }, restockWait ? RESTOCK_WAIT_MS : reducedMotion.matches ? 0 : 260);
   }
 
   function showOutcome() {
@@ -1195,11 +1203,16 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
     if (document.hidden) {
       if (playback) visitPausedAt = performance.now();
       clearTimeout(animationClock);
+      clearTimeout(timer);
     } else if (playback && visitPausedAt !== undefined) {
       playback.start += performance.now() - visitPausedAt;
       visitPausedAt = undefined;
       render();
       scheduleVisit();
+    }
+    if (!document.hidden) {
+      render();
+      scheduleService();
     }
   }
 
@@ -1222,8 +1235,8 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       } else if (current.pendingNegotiation || prior.phase === 'open' && current.phase === 'report') {
         renderOutcome = true;
       } else if (current.phase !== prior.phase) {
-        focus(current.phase === 'travel' ? 'preview-meadow' : 'book');
-        panel = current.phase === 'travel' ? 'newspaper' : null;
+        focus('book');
+        panel = null;
         returnFocus = 'book';
         viewedVendor = '';
         selectedOffer = '';
@@ -1333,6 +1346,7 @@ export async function mountShop(host: HTMLElement, keyboard: HTMLElement, readin
       observer.disconnect();
       visualViewport?.removeEventListener('resize', resize);
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(deskBookFrame);
       cancelAnimationFrame(visitFrame);
       clearTimeout(timer);
       clearTimeout(animationClock);

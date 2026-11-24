@@ -1,5 +1,9 @@
 # Shop day design
 
+The [Merchant Ledger redesign](merchant-ledger.md) records the agreed direction for the next UI iteration. It supersedes conflicting interface and gameplay details in the existing phase specifications once implemented; the descriptions below document the existing loop in the meantime.
+
+The companion [Merchant Ledger implementation roadmap](merchant-ledger-implementation.md) defines the architecture, phased work, review sequence, acceptance criteria and release constraints.
+
 Undercut is a traveling shop game. Each day, choose a market, decide where to spend your gold, set out the goods you think will sell, and see what those choices earned. The shop room stays on screen throughout the day. Each phase has a book on the desk for decisions and results.
 
 ## The four phases

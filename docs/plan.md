@@ -13,9 +13,9 @@ The existing game follows this shop loop.
 3. Open the shop and serve eight customers. Sales depend on demand, price, and availability.
 4. Close the shop and review revenue, first-in-first-out cost of goods sold, profit, and wholesale spending. Start another day with the remaining inventory and gold.
 
-The persistent campaign ledger remains available through a Ledger button throughout play. Its inventory, performance, market history, event log, and newspaper archive read from an optional append-only journal stored in the campaign snapshot. Phase-specific books, including the morning newspaper and Route Atlas, open at their stage transitions.
+The persistent campaign ledger remains available through a Ledger button throughout management play. Its inventory, performance, market history, event log, and saved Gazette editions read from optional additive records in the campaign snapshot. The ledger opens on the workspace for the current stage; the morning edition is integrated with Markets.
 
-The shop works on desktop and portrait mobile. The active shop fills the viewport with a PixiJS WebGL canvas. The door dial, market, shelves, counter, and ledger carry the day’s actions. Keyboard and assistive technology can reach the canvas controls through semantic controls. Account forms and campaign selection use native browser controls.
+The shop works on desktop and portrait mobile. The active shop fills the viewport with a PixiJS WebGL canvas. The animated ledger on the counter opens the campaign workspace; Markets handles destination choice. The shelves, counter, customer activity, and live business HUD carry shop actions. Keyboard and assistive technology can reach canvas controls through semantic controls. Account forms and campaign selection use native browser controls.
 The campaign shop uses the supplied harbor room art, with campaign stock displayed on its shelves and the Traveler sprite animating customer visits. Meadow and Forge visits show the matching Meadows and Foundry views through the window; Harbor retains its harbor view. The standalone scene study at `/__dev/shop` locally and `/preview/shop` on the hosted preview includes a window-view selector and does not change campaign state.
 
 Public registration, multiplayer, offline writes, world simulation, branching story events, and cross-campaign rewards are outside this milestone.

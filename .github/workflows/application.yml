@@ -120,6 +120,19 @@ jobs:
         shell: bash
         run: |
           docker load --input release-assets/undercut-images.tar.gz
+          resolve_image_digest() {
+            local tag=$1 digest
+            for attempt in {1..10}; do
+              if digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$tag" 2>/dev/null | jq -er .digest 2>/dev/null) \
+                  && [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                printf '%s' "$digest"
+                return 0
+              fi
+              sleep 2
+            done
+            printf 'Could not resolve image digest for %s after 10 attempts\n' "$tag" >&2
+            return 1
+          }
           push_image() {
             local local_tag=$1 repository=$2 env_key=$3
             local tag="$repository:sha-$BUILD_VERSION" image
@@ -127,7 +140,7 @@ jobs:
             test "$(docker image inspect --format '{{.Architecture}}' "$local_tag")" = amd64
             docker tag "$local_tag" "$tag"
             docker push "$tag"
-            image="$repository@$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$tag" | jq -er .digest)"
+            image="$repository@$(resolve_image_digest "$tag")"
             [[ "$image" =~ ^"$repository"@sha256:[0-9a-f]{64}$ ]]
             cosign sign --yes "$image"
             echo "$env_key=$image" >> "$GITHUB_ENV"
@@ -137,6 +150,19 @@ jobs:
       - name: Sign and promote the release
         shell: bash
         run: |
+          resolve_image_digest() {
+            local tag=$1 digest
+            for attempt in {1..10}; do
+              if digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$tag" 2>/dev/null | jq -er .digest 2>/dev/null) \
+                  && [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                printf '%s' "$digest"
+                return 0
+              fi
+              sleep 2
+            done
+            printf 'Could not resolve image digest for %s after 10 attempts\n' "$tag" >&2
+            return 1
+          }
           release_tag="$RELEASE_REPOSITORY:sha-$BUILD_VERSION"
           docker build --platform linux/amd64 --tag "$release_tag" \
             --build-arg "CHANNEL=$CHANNEL" --build-arg "BUILD_VERSION=$BUILD_VERSION" \
@@ -144,7 +170,7 @@ jobs:
             --build-arg "API_IMAGE=$API_IMAGE" --build-arg "WEB_IMAGE=$WEB_IMAGE" \
             --file infrastructure/release/Dockerfile .
           docker push "$release_tag"
-          release="$RELEASE_REPOSITORY@$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$release_tag" | jq -er .digest)"
+          release="$RELEASE_REPOSITORY@$(resolve_image_digest "$release_tag")"
           [[ "$release" =~ ^"$RELEASE_REPOSITORY"@sha256:[0-9a-f]{64}$ ]]
           cosign sign --yes "$release"
           docker buildx imagetools create --prefer-index=false --tag "$RELEASE_REPOSITORY:$CHANNEL" "$release"
